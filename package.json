@@ -1,5 +1,5 @@
 {
-  "name": "value-scanner-phase2",
+  "name": "value-scanner-phase3",
   "private": true,
   "scripts": {
     "dev": "next dev",
