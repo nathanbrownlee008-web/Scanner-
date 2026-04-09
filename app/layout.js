@@ -1,6 +1,6 @@
 export const metadata = {
-  title: "Value Scanner Phase 4",
-  description: "Responsive scanner with saved data and better mobile cards"
+  title: "Value Scanner Phase 6",
+  description: "Scanner with averages calculator"
 };
 
 export const viewport = {
