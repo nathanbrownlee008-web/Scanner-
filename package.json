@@ -1,5 +1,5 @@
 {
-  "name": "value-scanner-proper",
+  "name": "value-scanner-phase1",
   "private": true,
   "scripts": {
     "dev": "next dev",
