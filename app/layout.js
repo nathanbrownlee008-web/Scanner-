@@ -1,6 +1,6 @@
 export const metadata = {
-  title: "Value Scanner",
-  description: "Market-by-market value scanner"
+  title: "Value Scanner Phase 2",
+  description: "Dashboard scanner with fair odds and suggested odds"
 };
 
 import "./globals.css";
