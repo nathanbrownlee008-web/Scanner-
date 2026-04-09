@@ -1,5 +1,5 @@
 {
-  "name": "value-scanner-pro",
+  "name": "value-scanner-pro-v2",
   "private": true,
   "scripts": {
     "dev": "next dev",
