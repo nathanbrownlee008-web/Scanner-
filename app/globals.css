@@ -1,1 +1,12 @@
-body{background:#0b0f14;color:white;font-family:Arial;margin:0} .wrap{padding:15px;max-width:1000px;margin:auto} textarea,input{width:100%;margin-top:8px;padding:10px;border-radius:8px;border:none} .card{background:#111827;padding:15px;border-radius:12px;margin-top:15px} button{margin-top:10px;padding:10px 14px;border:none;border-radius:8px;background:#22c55e;color:white;font-weight:bold}
+
+body{background:#0b0f14;color:white;font-family:Arial;margin:0}
+.wrap{max-width:1100px;margin:auto;padding:15px}
+.tabs{display:flex;gap:8px;margin-bottom:10px}
+.tab{padding:8px 12px;border-radius:8px;background:#1f2937;cursor:pointer}
+.active{background:#22c55e}
+.card{background:#111827;padding:15px;border-radius:12px;margin-top:12px}
+input,textarea{width:100%;margin-top:6px;padding:10px;border-radius:8px;border:none}
+button{margin-top:10px;padding:10px;border:none;border-radius:8px;background:#22c55e;color:white;font-weight:bold;width:100%}
+.good{color:#22c55e}.bad{color:#ef4444}
+.bar{height:8px;border-radius:6px;background:#222;margin-top:8px}
+.fill{height:8px;border-radius:6px;background:#22c55e}

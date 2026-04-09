@@ -1,1 +1,3 @@
-export const metadata={title:"Value Scanner 7.2 Pro"};import "./globals.css";export default function RootLayout({children}){return(<html><body>{children}</body></html>)}
+export const metadata={title:"Value Scanner Elite"};
+import "./globals.css";
+export default function RootLayout({children}){return(<html><body>{children}</body></html>)}
