@@ -1,5 +1,7 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+const STORAGE_KEY = "value-scanner-phase4";
 
 const MARKET_CONFIG = {
   goals: { label: "Goals", emoji: "⚽", lineHint: "Usually 2.5, 3.5, 1.5 etc", forLabel: "Goals scored avg", againstLabel: "Goals conceded avg" },
@@ -161,6 +163,31 @@ function parseBulk(text){
     };
   }).filter(Boolean);
 }
+function parseQuickPaste(text, selectedMarket){
+  return text
+    .split("\n")
+    .map(x => x.trim())
+    .filter(Boolean)
+    .map((line, idx) => {
+      const p = line.split(/[,\t|]+/).map(x => x.trim()).filter(Boolean);
+      if (p.length === 8){
+        return {
+          id: `${Date.now()}-qp-${idx}`,
+          match: p[0],
+          market: selectedMarket,
+          homeFor: p[1],
+          homeAgainst: p[2],
+          awayFor: p[3],
+          awayAgainst: p[4],
+          line: p[5],
+          overOdds: p[6],
+          underOdds: p[7],
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
+}
 const pct = v => `${(v * 100).toFixed(1)}%`;
 const num = v => Number(v).toFixed(2);
 
@@ -169,6 +196,7 @@ export default function App(){
   const [market, setMarket] = useState("goals");
   const [forms, setForms] = useState(DEFAULTS);
   const [bulkText, setBulkText] = useState(BULK_EXAMPLE);
+  const [quickPasteText, setQuickPasteText] = useState("");
   const [rows, setRows] = useState([]);
   const [tracked, setTracked] = useState([]);
   const [settings, setSettings] = useState({
@@ -180,10 +208,33 @@ export default function App(){
     stakeGood: 2,
     stakeLean: 1,
   });
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw){
+        const data = JSON.parse(raw);
+        if (data.forms) setForms(data.forms);
+        if (data.bulkText) setBulkText(data.bulkText);
+        if (data.rows) setRows(data.rows);
+        if (data.tracked) setTracked(data.tracked);
+        if (data.settings) setSettings(data.settings);
+        if (data.market) setMarket(data.market);
+      }
+    }catch(e){}
+    setLoaded(true)
+  }, []);
+
+  useEffect(() => {
+    if (!loaded) return;
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ forms, bulkText, rows, tracked, settings, market }));
+    }catch(e){}
+  }, [forms, bulkText, rows, tracked, settings, market, loaded]);
 
   const active = forms[market];
   const cfg = MARKET_CONFIG[market];
-
   const singleResult = useMemo(() => analyseRow({ ...active, market }, settings), [active, market, settings]);
   const analysedRows = useMemo(() => rows.map(r => analyseRow(r, settings)).filter(Boolean).sort((a,b) => b.edge - a.edge), [rows, settings]);
 
@@ -220,10 +271,20 @@ export default function App(){
     };
     setForms(prev => ({ ...prev, [market]: ex[market] }));
   }
+  function clearForm(){
+    setForms(prev => ({ ...prev, [market]: DEFAULTS[market] }));
+  }
   function addSingleToScanner(){
     setRows(prev => [{ ...active, market, id: `${Date.now()}-single` }, ...prev]);
   }
   function importBulk(){ setRows(parseBulk(bulkText)); }
+  function importQuickPaste(){
+    const parsed = parseQuickPaste(quickPasteText, market);
+    if (parsed.length) {
+      setRows(prev => [...parsed, ...prev]);
+      setQuickPasteText("");
+    }
+  }
   function clearScanner(){ setRows([]); }
 
   function badgeClass(conf){
@@ -279,6 +340,23 @@ export default function App(){
   function updateTracked(id, field, value){
     setTracked(prev => prev.map(x => x.id === id ? { ...x, [field]: value } : x));
   }
+  function clearSavedData(){
+    try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+    setForms(DEFAULTS);
+    setBulkText(BULK_EXAMPLE);
+    setQuickPasteText("");
+    setRows([]);
+    setTracked([]);
+    setSettings({
+      edgeThreshold: 3,
+      suggestedMultiplier: 1.05,
+      homeAwayBoost: true,
+      knockoutMode: false,
+      stakeStrong: 3,
+      stakeGood: 2,
+      stakeLean: 1,
+    });
+  }
 
   return (
     <main className="page">
@@ -295,31 +373,29 @@ export default function App(){
             <div className="titleRow">
               <div className="logo">🔥</div>
               <div>
-                <div className="title">Value Scanner Phase 3</div>
-                <div className="subtitle">Responsive mobile-fit layout, collapsible bulk scanner, best bets dashboard, tracker, and settings.</div>
+                <div className="title">Value Scanner Phase 4</div>
+                <div className="subtitle">Saved browser data, cleaner paste import, and stronger mobile cards. Your scans and tracker stay after refresh on the same device/browser.</div>
               </div>
             </div>
             <div className="pillRow">
-              <div className="pill">Mobile-fit layout</div>
-              <div className="pill">Collapsible bulk import</div>
-              <div className="pill">Best bets dashboard</div>
-              <div className="pill">Tracker + ROI</div>
+              <div className="pill">Saves after refresh</div>
+              <div className="pill">Mobile-fit</div>
+              <div className="pill">Quick paste import</div>
+              <div className="pill">Collapsible bulk box</div>
             </div>
           </div>
           <div className="helpCard">
-            <h3 style={{marginTop:0}}>What fair odds mean</h3>
-            <p className="muted">Fair odds are your model break-even price. Suggested odds are a slightly safer target price to hold out for.</p>
-            <ul className="small">
-              <li>If your fair price for Over is 1.85 and the bookie offers 2.00, that can be value.</li>
-              <li>If the bookie offers worse than your fair price, the edge usually is not there.</li>
-            </ul>
+            <h3 style={{marginTop:0}}>Quick paste format</h3>
+            <p className="muted">In quick paste, use one market at a time and paste rows like:</p>
+            <div className="small">Match, Home For, Home Against, Away For, Away Against, Line, Over Odds, Under Odds</div>
+            <div className="quickHint">Example: Bologna vs Aston Villa, 5.2, 4.6, 5.0, 4.8, 9.5, 1.91, 1.80</div>
           </div>
         </section>
 
         <section className="dashboardGrid">
-          <div className="kpi"><div className="k">Scanned rows</div><div className="v">{analysedRows.length}</div><div className="s">Multi-game scanner</div></div>
+          <div className="kpi"><div className="k">Scanned rows</div><div className="v">{analysedRows.length}</div><div className="s">Stored on this browser</div></div>
           <div className="kpi"><div className="k">Strong bets</div><div className="v">{strongCount}</div><div className="s">Top priority</div></div>
-          <div className="kpi"><div className="k">Good bets</div><div className="v">{goodCount}</div><div className="s">Playable</div></div>
+          <div className="kpi"><div className="k">Tracker bets</div><div className="v">{tracked.length}</div><div className="s">Saved after refresh</div></div>
           <div className="kpi"><div className="k">Best edge</div><div className="v">{bestRow ? `${bestRow.edge.toFixed(1)}%` : "-"}</div><div className="s">{bestRow ? bestRow.match : "No rows yet"}</div></div>
         </section>
 
@@ -374,8 +450,18 @@ export default function App(){
 
               <div className="actions">
                 <button className="btn primary" onClick={loadExample}>Load example</button>
+                <button className="btn secondary" onClick={clearForm}>Clear form</button>
                 <button className="btn secondary" onClick={addSingleToScanner}>Add to scanner</button>
                 <button className="btn secondary" onClick={() => singleResult && addToTrackerFromResult(singleResult)}>Add to tracker</button>
+              </div>
+
+              <div className="quickPaste">
+                <h3 style={{marginTop:0, marginBottom:8}}>Quick paste</h3>
+                <textarea className="textarea" value={quickPasteText} onChange={(e) => setQuickPasteText(e.target.value)} placeholder={`One market at a time.\nBologna vs Aston Villa, 5.2, 4.6, 5.0, 4.8, 9.5, 1.91, 1.80`} />
+                <div className="actions">
+                  <button className="btn primary" onClick={importQuickPaste}>Import quick rows</button>
+                </div>
+                <div className="quickHint">This uses the currently selected market tab.</div>
               </div>
 
               <details className="bulkBox">
@@ -407,7 +493,7 @@ export default function App(){
                       <div className="pickName">{singleResult.pick}</div>
                       <div className="small">{active.match || cfg.label} · {cfg.label}</div>
                     </div>
-                    <div className={badgeClass(singleResult.confidence)}>{singleResult.confidence}</div>
+                    <div className={singleResult.confidence === "Strong" || singleResult.confidence === "Good" ? "badge green" : singleResult.confidence === "Lean" ? "badge amber" : "badge red"}>{singleResult.confidence}</div>
                   </div>
 
                   <div className="resultMetrics">
@@ -458,7 +544,7 @@ export default function App(){
                   </div>
 
                   <div className="decision">
-                    <div className={`decisionText ${decisionClass}`}>
+                    <div className={`decisionText ${!singleResult || singleResult.side === "skip" ? "skip" : singleResult.confidence === "Strong" ? "strong" : singleResult.confidence === "Good" ? "good" : "lean"}`}>
                       {singleResult.side === "skip" ? "NO BET" : `${singleResult.confidence.toUpperCase()} ${singleResult.pick} (${singleResult.edge.toFixed(1)}%)`}
                     </div>
                     <div className="small">{singleResult.explanation} · {singleResult.volatility}</div>
@@ -470,8 +556,8 @@ export default function App(){
         )}
 
         {activeTab === "best" && (
-          <section className="tabShell">
-            <div className="card">
+          <section>
+            <div className="card" style={{marginBottom:12}}>
               <h2 className="sectionTitle">Best Bets Today</h2>
               <p className="sectionSub">Top scanner rows sorted by edge.</p>
 
@@ -486,7 +572,7 @@ export default function App(){
                           <div className="bestTitle">{row.pick}</div>
                           <div className="bestMeta">{row.match} · {MARKET_CONFIG[row.market]?.emoji} {MARKET_CONFIG[row.market]?.label}</div>
                         </div>
-                        <div className={badgeClass(row.confidence)}>{row.confidence}</div>
+                        <div className={row.confidence === "Strong" || row.confidence === "Good" ? "badge green" : row.confidence === "Lean" ? "badge amber" : "badge red"}>{row.confidence}</div>
                       </div>
 
                       <div className="bestStats">
@@ -506,45 +592,72 @@ export default function App(){
             </div>
 
             <div className="card">
-              <h2 className="sectionTitle">Scanner Table</h2>
-              <p className="sectionSub">Full list with fair and suggested odds.</p>
+              <h2 className="sectionTitle">Scanner rows</h2>
+              <p className="sectionSub">Desktop table and mobile cards.</p>
+
               {analysedRows.length === 0 ? (
                 <p className="muted">No rows yet.</p>
               ) : (
-                <div className="tableWrap">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Match</th>
-                        <th>Market</th>
-                        <th>Pick</th>
-                        <th>Edge</th>
-                        <th>Confidence</th>
-                        <th>True line</th>
-                        <th>Book line</th>
-                        <th>Book O/U</th>
-                        <th>Fair odds</th>
-                        <th>Suggested</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {analysedRows.map((row) => (
-                        <tr key={row.id}>
-                          <td>{row.match}</td>
-                          <td>{MARKET_CONFIG[row.market]?.emoji} {MARKET_CONFIG[row.market]?.label}</td>
-                          <td>{row.pick}</td>
-                          <td>{row.edge.toFixed(1)}%</td>
-                          <td>{row.confidence}</td>
-                          <td>{num(row.trueLine)}</td>
-                          <td>{row.line}</td>
-                          <td>{row.overOdds} / {row.underOdds}</td>
-                          <td>{row.side === "over" ? `Over ${num(row.fairOverOdds)}` : row.side === "under" ? `Under ${num(row.fairUnderOdds)}` : `Over ${num(row.fairOverOdds)} · Under ${num(row.fairUnderOdds)}`}</td>
-                          <td>{row.side === "over" ? `Over ${num(row.suggestedOverOdds)}` : row.side === "under" ? `Under ${num(row.suggestedUnderOdds)}` : `Over ${num(row.suggestedOverOdds)} · Under ${num(row.suggestedUnderOdds)}`}</td>
+                <>
+                  <div className="tableWrap">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Match</th>
+                          <th>Market</th>
+                          <th>Pick</th>
+                          <th>Edge</th>
+                          <th>Confidence</th>
+                          <th>True line</th>
+                          <th>Book line</th>
+                          <th>Book O/U</th>
+                          <th>Fair odds</th>
+                          <th>Suggested</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {analysedRows.map((row) => (
+                          <tr key={row.id}>
+                            <td>{row.match}</td>
+                            <td>{MARKET_CONFIG[row.market]?.emoji} {MARKET_CONFIG[row.market]?.label}</td>
+                            <td>{row.pick}</td>
+                            <td>{row.edge.toFixed(1)}%</td>
+                            <td>{row.confidence}</td>
+                            <td>{num(row.trueLine)}</td>
+                            <td>{row.line}</td>
+                            <td>{row.overOdds} / {row.underOdds}</td>
+                            <td>{row.side === "over" ? `Over ${num(row.fairOverOdds)}` : row.side === "under" ? `Under ${num(row.fairUnderOdds)}` : `Over ${num(row.fairOverOdds)} · Under ${num(row.fairUnderOdds)}`}</td>
+                            <td>{row.side === "over" ? `Over ${num(row.suggestedOverOdds)}` : row.side === "under" ? `Under ${num(row.suggestedUnderOdds)}` : `Over ${num(row.suggestedOverOdds)} · Under ${num(row.suggestedUnderOdds)}`}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="mobileScanList">
+                    {analysedRows.map((row) => (
+                      <div className="mobileScanCard" key={`m-${row.id}`}>
+                        <div className="mobileCardTop">
+                          <div>
+                            <div className="mobileCardTitle">{row.pick}</div>
+                            <div className="mobileCardMeta">{row.match}</div>
+                            <div className="mobileCardMeta">{MARKET_CONFIG[row.market]?.emoji} {MARKET_CONFIG[row.market]?.label}</div>
+                          </div>
+                          <div className={row.confidence === "Strong" || row.confidence === "Good" ? "badge green" : row.confidence === "Lean" ? "badge amber" : "badge red"}>{row.confidence}</div>
+                        </div>
+                        <div className="mobileCardStats">
+                          <div className="mobileStat"><div className="k">Edge</div><div className="v">{row.edge.toFixed(1)}%</div></div>
+                          <div className="mobileStat"><div className="k">True</div><div className="v">{num(row.trueLine)}</div></div>
+                          <div className="mobileStat"><div className="k">Fair</div><div className="v">{row.side === "over" ? num(row.fairOverOdds) : num(row.fairUnderOdds)}</div></div>
+                          <div className="mobileStat"><div className="k">Suggested</div><div className="v">{row.side === "over" ? num(row.suggestedOverOdds) : num(row.suggestedUnderOdds)}</div></div>
+                        </div>
+                        <div className="actions">
+                          <button className="btn secondary" onClick={() => addScannerRowToTracker(row)}>Add to tracker</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           </section>
@@ -582,17 +695,10 @@ export default function App(){
                     <tbody>
                       {tracked.map((row) => (
                         <tr key={row.id}>
-                          <td>
-                            {row.match}
-                            <div className="small">{row.market} · {row.confidence}</div>
-                          </td>
+                          <td>{row.match}<div className="small">{row.market} · {row.confidence}</div></td>
                           <td>{row.pick}</td>
-                          <td>
-                            <input className="input" value={row.odds} onChange={(e) => updateTracked(row.id, "odds", e.target.value)} />
-                          </td>
-                          <td>
-                            <input className="input" value={row.stake} onChange={(e) => updateTracked(row.id, "stake", e.target.value)} />
-                          </td>
+                          <td><input className="input" value={row.odds} onChange={(e) => updateTracked(row.id, "odds", e.target.value)} /></td>
+                          <td><input className="input" value={row.stake} onChange={(e) => updateTracked(row.id, "stake", e.target.value)} /></td>
                           <td>{Number(row.edge).toFixed(1)}%</td>
                           <td>
                             <select className="input" value={row.result} onChange={(e) => updateTracked(row.id, "result", e.target.value)}>
@@ -616,7 +722,7 @@ export default function App(){
           <section className="settingsGrid">
             <div className="card">
               <h2 className="sectionTitle">Settings</h2>
-              <p className="sectionSub">Tune your scanner thresholds and defaults.</p>
+              <p className="sectionSub">Tune thresholds and defaults.</p>
               <div className="formGrid">
                 <div className="field">
                   <label>Edge threshold %</label>
@@ -647,6 +753,10 @@ export default function App(){
                   {settings.knockoutMode ? "Knockout mode on" : "Knockout mode off"}
                 </button>
               </div>
+              <div className="actions">
+                <button className="btn danger" onClick={clearSavedData}>Clear all saved browser data</button>
+              </div>
+              <div className="quickHint">This clears saved scans, tracker bets, and settings on this browser.</div>
             </div>
           </section>
         )}

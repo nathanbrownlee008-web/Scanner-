@@ -1,12 +1,11 @@
 export const metadata = {
-  title: "Value Scanner Phase 3",
-  description: "Responsive scanner, dashboard and tracker"
+  title: "Value Scanner Phase 4",
+  description: "Responsive scanner with saved data and better mobile cards"
 };
 
 export const viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: "cover",
 };
 
