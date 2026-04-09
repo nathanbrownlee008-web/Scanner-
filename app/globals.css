@@ -1,1 +1,1 @@
-body{background:#0b0f14;color:white;font-family:Arial;margin:0} .box{padding:20px}
+body{background:#0b0f14;color:white;font-family:Arial;margin:0} .wrap{padding:15px;max-width:1000px;margin:auto} textarea,input{width:100%;margin-top:8px;padding:10px;border-radius:8px;border:none} .card{background:#111827;padding:15px;border-radius:12px;margin-top:15px} button{margin-top:10px;padding:10px 14px;border:none;border-radius:8px;background:#22c55e;color:white;font-weight:bold}
