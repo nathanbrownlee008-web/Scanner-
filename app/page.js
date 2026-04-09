@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 
-const STORAGE_KEY = "value-scanner-phase6-1";
+const STORAGE_KEY = "value-scanner-phase6-2";
 
 const MARKET_CONFIG = {
   goals: { label: "Goals", emoji: "⚽", lineHint: "Usually 2.5, 3.5, 1.5 etc", forLabel: "Goals scored avg", againstLabel: "Goals conceded avg", typicalMin: 0, typicalMax: 3.5 },
@@ -20,7 +20,6 @@ const DEFAULTS = {
 function parseNum(v){ const n = parseFloat(v); return Number.isFinite(n) ? n : null; }
 function parseSeries(text){ return text.split(/[\n, ]+/).map(x=>x.trim()).filter(Boolean).map(Number).filter(Number.isFinite); }
 function avg(arr){ return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
-
 let factCache = [0];
 function logFactorial(n){ if (factCache[n] != null) return factCache[n]; let sum = factCache[factCache.length-1]; for(let i=factCache.length;i<=n;i++){ sum += Math.log(i); factCache[i]=sum; } return factCache[n];}
 function poissonPmf(k, lambda){ if (lambda <= 0) return k===0?1:0; return Math.exp(-lambda + k*Math.log(lambda) - logFactorial(k));}
@@ -50,7 +49,6 @@ function analyseRow(row, settings){
   const explanation=side==="over"?"Model higher than market → OVER value.":side==="under"?"Market overpriced → UNDER value.":"No clear edge → skip.";
   return {...row, expectedHome, expectedAway, expectedTotal, modelOver, modelUnder, fairOver, fairUnder, overEdge, underEdge, side, pick, edge, confidence, fairOverOdds, fairUnderOdds, suggestedOverOdds, suggestedUnderOdds, trueLine:expectedTotal, confidenceScore, volatility, explanation};
 }
-
 const pct=v=>`${(v*100).toFixed(1)}%`; const num=v=>Number(v).toFixed(2);
 
 export default function App(){
@@ -61,19 +59,16 @@ export default function App(){
   const [rows,setRows]=useState([]);
   const [tracked,setTracked]=useState([]);
   const [settings,setSettings]=useState({edgeThreshold:3,suggestedMultiplier:1.05,homeAwayBoost:true,knockoutMode:false,stakeStrong:3,stakeGood:2,stakeLean:1});
-  const [avgCalc,setAvgCalc]=useState({match:"", market:"goals", homeForSeries:"", homeAgainstSeries:"", awayForSeries:"", awayAgainstSeries:""});
+  const [avgCalc,setAvgCalc]=useState({match:"", market:"goals", mode:"split", homeForSeries:"", homeAgainstSeries:"", awayForSeries:"", awayAgainstSeries:""});
   const [loaded,setLoaded]=useState(false);
 
   useEffect(()=>{ try{ const raw=localStorage.getItem(STORAGE_KEY); if(raw){ const d=JSON.parse(raw); if(d.forms)setForms(d.forms); if(d.bulkText!==undefined)setBulkText(d.bulkText); if(d.rows)setRows(d.rows); if(d.tracked)setTracked(d.tracked); if(d.settings)setSettings(d.settings); if(d.market)setMarket(d.market); if(d.avgCalc)setAvgCalc(d.avgCalc);} }catch(e){} setLoaded(true); },[]);
-  useEffect(()=>{ if(!loaded) return; try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({forms,bulkText,rows,tracked,settings,market,avgCalc})); }catch(e){} },[forms,bulkText,rows,tracked,settings,market,avgCalc,loaded]);
+  useEffect(()=>{ if(!loaded)return; try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({forms,bulkText,rows,tracked,settings,market,avgCalc})); }catch(e){} },[forms,bulkText,rows,tracked,settings,market,avgCalc,loaded]);
 
-  const active=forms[market];
-  const cfg=MARKET_CONFIG[market];
-  const avgCfg=MARKET_CONFIG[avgCalc.market];
+  const active=forms[market]; const cfg=MARKET_CONFIG[market]; const avgCfg=MARKET_CONFIG[avgCalc.market];
   const singleResult=useMemo(()=>analyseRow({...active, market}, settings),[active,market,settings]);
   const analysedRows=useMemo(()=>rows.map(r=>analyseRow(r,settings)).filter(Boolean).sort((a,b)=>b.edge-a.edge),[rows,settings]);
-  const strongCount=analysedRows.filter(r=>r.confidence==="Strong").length;
-  const bestRow=analysedRows[0]||null;
+  const strongCount=analysedRows.filter(r=>r.confidence==="Strong").length; const bestRow=analysedRows[0]||null;
   const trackerStats=useMemo(()=>{ const settled=tracked.filter(x=>x.result!=="Pending"); const wins=settled.filter(x=>x.result==="Won").length; const losses=settled.filter(x=>x.result==="Lost").length; const profit=settled.reduce((sum,x)=> x.result==="Won" ? sum+((Number(x.odds)-1)*Number(x.stake)) : x.result==="Lost" ? sum-Number(x.stake) : sum ,0); const stake=settled.filter(x=>x.result!=="Void").reduce((sum,x)=>sum+Number(x.stake),0); const roi=stake>0?(profit/stake)*100:0; const winrate=(wins+losses)>0?(wins/(wins+losses))*100:0; return {settled: settled.length, profit, roi, winrate}; },[tracked]);
 
   const avgResult=useMemo(()=>{
@@ -104,7 +99,7 @@ export default function App(){
   function addScannerRowToTracker(row){ const stake=row.confidence==="Strong"?settings.stakeStrong:row.confidence==="Good"?settings.stakeGood:settings.stakeLean; const odds=row.side==="over"?row.overOdds:row.underOdds; setTracked(prev=>[{id:`${Date.now()}-${row.id}`,match:row.match,market:MARKET_CONFIG[row.market]?.label||row.market,pick:row.pick,confidence:row.confidence,edge:row.edge,odds,stake,result:"Pending"},...prev]); setActiveTab("tracker"); }
   function addToTrackerFromResult(result){ if(!result||result.side==="skip")return; const stake=result.confidence==="Strong"?settings.stakeStrong:result.confidence==="Good"?settings.stakeGood:settings.stakeLean; const odds=result.side==="over"?active.overOdds:active.underOdds; setTracked(prev=>[{id:`${Date.now()}`,match:active.match||`${cfg.label} bet`,market:cfg.label,pick:result.pick,confidence:result.confidence,edge:result.edge,odds,stake,result:"Pending"},...prev]); setActiveTab("tracker"); }
   function updateTracked(id,field,value){ setTracked(prev=>prev.map(x=>x.id===id?{...x,[field]:value}:x)); }
-  function clearSaved(){ try{localStorage.removeItem(STORAGE_KEY)}catch(e){} setForms(DEFAULTS); setBulkText(""); setRows([]); setTracked([]); setAvgCalc({match:"",market:"goals",homeForSeries:"",homeAgainstSeries:"",awayForSeries:"",awayAgainstSeries:""}); setSettings({edgeThreshold:3,suggestedMultiplier:1.05,homeAwayBoost:true,knockoutMode:false,stakeStrong:3,stakeGood:2,stakeLean:1}); }
+  function clearSaved(){ try{localStorage.removeItem(STORAGE_KEY)}catch(e){} setForms(DEFAULTS); setBulkText(""); setRows([]); setTracked([]); setAvgCalc({match:"",market:"goals",mode:"split",homeForSeries:"",homeAgainstSeries:"",awayForSeries:"",awayAgainstSeries:""}); setSettings({edgeThreshold:3,suggestedMultiplier:1.05,homeAwayBoost:true,knockoutMode:false,stakeStrong:3,stakeGood:2,stakeLean:1}); }
   function badgeClass(conf){ if(conf==="Strong"||conf==="Good") return "badge green"; if(conf==="Lean") return "badge amber"; return "badge red"; }
 
   return (
@@ -119,12 +114,16 @@ export default function App(){
 
       <section className="hero">
         <div className="heroCard">
-          <div className="titleRow"><div className="logo">🔥</div><div><div className="title">Value Scanner Phase 6.1</div><div className="subtitle">Averages are now market-aware. Pick the market in Averages and it auto switches Scanner to the same market.</div></div></div>
-          <div className="pillRow"><div className="pill active">Market-aware averages</div><div className="pill">Mismatch warning</div><div className="pill">Auto switch scanner tab</div></div>
+          <div className="titleRow"><div className="logo">🔥</div><div><div className="title">Value Scanner Phase 6.2</div><div className="subtitle">Easier to understand. The Averages tab now tells you exactly whether to use home-only or away-only numbers.</div></div></div>
+          <div className="pillRow"><div className="pill active">Home-only / away-only guidance</div><div className="pill">Market-aware averages</div><div className="pill">Auto switch scanner</div></div>
         </div>
         <div className="helpCard">
-          <h3 style={{marginTop:0}}>Simple rule</h3>
-          <div className="small">Goals numbers are usually low. Corners and SOT are much higher. If your averages look too big for goals, the app now warns you.</div>
+          <h3 style={{marginTop:0}}>Correct method</h3>
+          <div className="small">
+            Home team = last 5 <strong>home</strong> games only.<br/>
+            Away team = last 5 <strong>away</strong> games only.<br/>
+            Do not mix them.
+          </div>
         </div>
       </section>
 
@@ -139,7 +138,7 @@ export default function App(){
         <section className="avgGrid">
           <div className="card">
             <h2 className="sectionTitle">Averages calculator</h2>
-            <p className="sectionSub">Choose the market first, then paste each recent match number. Example: 4,5,3,6,4</p>
+            <p className="sectionSub">Choose the market first, then paste recent match numbers.</p>
 
             <div className="marketTabs">
               {Object.entries(MARKET_CONFIG).map(([k,item])=>(
@@ -149,25 +148,42 @@ export default function App(){
               ))}
             </div>
 
+            <div className="pillRow">
+              <button className={`pill ${avgCalc.mode==="split"?"active":""}`} onClick={()=>setAvgCalc(s=>({...s, mode:"split"}))}>Recommended: split home/away</button>
+              <button className={`pill ${avgCalc.mode==="mixed"?"active":""}`} onClick={()=>setAvgCalc(s=>({...s, mode:"mixed"}))}>Quick mode: mixed last 5</button>
+            </div>
+
+            {avgCalc.mode === "split" ? (
+              <div className="rulebox">
+                <strong>Use this:</strong><br/>
+                Home team stats = last 5 <strong>home</strong> games only.<br/>
+                Away team stats = last 5 <strong>away</strong> games only.
+              </div>
+            ) : (
+              <div className="warn">
+                Quick mode mixes home and away games together. It is faster, but less accurate.
+              </div>
+            )}
+
             <div className="formGrid">
               <div className="field full">
                 <label>Match name</label>
                 <input className="input" value={avgCalc.match} onChange={(e)=>setAvgCalc(s=>({...s, match:e.target.value}))} placeholder="Bologna vs Aston Villa" />
               </div>
               <div className="field">
-                <label>Home team {avgCfg.forLabel} series</label>
+                <label>{avgCalc.mode==="split" ? `Home team ${avgCfg.forLabel} series (HOME games only)` : `Home team ${avgCfg.forLabel} series (mixed games)`}</label>
                 <textarea className="textarea" value={avgCalc.homeForSeries} onChange={(e)=>setAvgCalc(s=>({...s, homeForSeries:e.target.value}))} placeholder="4,5,3,6,4" />
               </div>
               <div className="field">
-                <label>Home team {avgCfg.againstLabel} series</label>
+                <label>{avgCalc.mode==="split" ? `Home team ${avgCfg.againstLabel} series (HOME games only)` : `Home team ${avgCfg.againstLabel} series (mixed games)`}</label>
                 <textarea className="textarea" value={avgCalc.homeAgainstSeries} onChange={(e)=>setAvgCalc(s=>({...s, homeAgainstSeries:e.target.value}))} placeholder="3,4,4,2,5" />
               </div>
               <div className="field">
-                <label>Away team {avgCfg.forLabel} series</label>
+                <label>{avgCalc.mode==="split" ? `Away team ${avgCfg.forLabel} series (AWAY games only)` : `Away team ${avgCfg.forLabel} series (mixed games)`}</label>
                 <textarea className="textarea" value={avgCalc.awayForSeries} onChange={(e)=>setAvgCalc(s=>({...s, awayForSeries:e.target.value}))} placeholder="5,3,4,6,5" />
               </div>
               <div className="field">
-                <label>Away team {avgCfg.againstLabel} series</label>
+                <label>{avgCalc.mode==="split" ? `Away team ${avgCfg.againstLabel} series (AWAY games only)` : `Away team ${avgCfg.againstLabel} series (mixed games)`}</label>
                 <textarea className="textarea" value={avgCalc.awayAgainstSeries} onChange={(e)=>setAvgCalc(s=>({...s, awayAgainstSeries:e.target.value}))} placeholder="4,5,3,4,4" />
               </div>
             </div>
@@ -178,7 +194,7 @@ export default function App(){
               </div>
             ) : likelyMarket ? (
               <div className="goodbox">
-                Selected market: <strong>{MARKET_CONFIG[avgCalc.market].label}</strong>. Likely market from the number sizes: <strong>{MARKET_CONFIG[likelyMarket].label}</strong>.
+                Selected market: <strong>{MARKET_CONFIG[avgCalc.market].label}</strong>. Likely market from number size: <strong>{MARKET_CONFIG[likelyMarket].label}</strong>.
               </div>
             ) : null}
 
@@ -277,30 +293,28 @@ export default function App(){
       )}
 
       {activeTab==="best" && (
-        <section>
-          <div className="card">
-            <h2 className="sectionTitle">Best Bets Today</h2>
-            {analysedRows.length===0?<p className="muted">No scanned rows yet.</p>:(
-              <div className="bestList">
-                {analysedRows.slice(0,8).map((row)=>(
-                  <div className="bestCard" key={row.id}>
-                    <div className="bestTop">
-                      <div><div className="bestTitle">{row.pick}</div><div className="bestMeta">{row.match} · {MARKET_CONFIG[row.market]?.emoji} {MARKET_CONFIG[row.market]?.label}</div></div>
-                      <div className={badgeClass(row.confidence)}>{row.confidence}</div>
-                    </div>
-                    <div className="bestStats">
-                      <div className="bestStat"><div className="k">Edge</div><div className="v">{row.edge.toFixed(1)}%</div></div>
-                      <div className="bestStat"><div className="k">True line</div><div className="v">{num(row.trueLine)}</div></div>
-                      <div className="bestStat"><div className="k">Fair</div><div className="v">{row.side==="over"?num(row.fairOverOdds):num(row.fairUnderOdds)}</div></div>
-                      <div className="bestStat"><div className="k">Suggested</div><div className="v">{row.side==="over"?num(row.suggestedOverOdds):num(row.suggestedUnderOdds)}</div></div>
-                    </div>
-                    <div className="actions"><button className="btn secondary" onClick={()=>addScannerRowToTracker(row)}>Add to tracker</button></div>
+        <section><div className="card">
+          <h2 className="sectionTitle">Best Bets Today</h2>
+          {analysedRows.length===0?<p className="muted">No scanned rows yet.</p>:(
+            <div className="bestList">
+              {analysedRows.slice(0,8).map((row)=>(
+                <div className="bestCard" key={row.id}>
+                  <div className="bestTop">
+                    <div><div className="bestTitle">{row.pick}</div><div className="bestMeta">{row.match} · {MARKET_CONFIG[row.market]?.emoji} {MARKET_CONFIG[row.market]?.label}</div></div>
+                    <div className={badgeClass(row.confidence)}>{row.confidence}</div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
+                  <div className="bestStats">
+                    <div className="bestStat"><div className="k">Edge</div><div className="v">{row.edge.toFixed(1)}%</div></div>
+                    <div className="bestStat"><div className="k">True line</div><div className="v">{num(row.trueLine)}</div></div>
+                    <div className="bestStat"><div className="k">Fair</div><div className="v">{row.side==="over"?num(row.fairOverOdds):num(row.fairUnderOdds)}</div></div>
+                    <div className="bestStat"><div className="k">Suggested</div><div className="v">{row.side==="over"?num(row.suggestedOverOdds):num(row.suggestedUnderOdds)}</div></div>
+                  </div>
+                  <div className="actions"><button className="btn secondary" onClick={()=>addScannerRowToTracker(row)}>Add to tracker</button></div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div></section>
       )}
 
       {activeTab==="tracker" && (
@@ -340,23 +354,21 @@ export default function App(){
       )}
 
       {activeTab==="settings" && (
-        <section>
-          <div className="card">
-            <h2 className="sectionTitle">Settings</h2>
-            <div className="formGrid">
-              <div className="field"><label>Edge threshold %</label><input className="input" value={settings.edgeThreshold} onChange={(e)=>setSettings(s=>({...s,edgeThreshold:Number(e.target.value)||0}))} /></div>
-              <div className="field"><label>Suggested odds multiplier</label><input className="input" value={settings.suggestedMultiplier} onChange={(e)=>setSettings(s=>({...s,suggestedMultiplier:Number(e.target.value)||1}))} /></div>
-              <div className="field"><label>Strong stake</label><input className="input" value={settings.stakeStrong} onChange={(e)=>setSettings(s=>({...s,stakeStrong:Number(e.target.value)||0}))} /></div>
-              <div className="field"><label>Good stake</label><input className="input" value={settings.stakeGood} onChange={(e)=>setSettings(s=>({...s,stakeGood:Number(e.target.value)||0}))} /></div>
-              <div className="field"><label>Lean stake</label><input className="input" value={settings.stakeLean} onChange={(e)=>setSettings(s=>({...s,stakeLean:Number(e.target.value)||0}))} /></div>
-            </div>
-            <div className="pillRow">
-              <button className={`pill ${settings.homeAwayBoost ? "active" : ""}`} onClick={()=>setSettings(s=>({...s,homeAwayBoost:!s.homeAwayBoost}))}>{settings.homeAwayBoost?"Home/Away boost on":"Home/Away boost off"}</button>
-              <button className={`pill ${settings.knockoutMode ? "active" : ""}`} onClick={()=>setSettings(s=>({...s,knockoutMode:!s.knockoutMode}))}>{settings.knockoutMode?"Knockout mode on":"Knockout mode off"}</button>
-            </div>
-            <div className="actions"><button className="btn danger" onClick={clearSaved}>Clear all saved browser data</button></div>
+        <section><div className="card">
+          <h2 className="sectionTitle">Settings</h2>
+          <div className="formGrid">
+            <div className="field"><label>Edge threshold %</label><input className="input" value={settings.edgeThreshold} onChange={(e)=>setSettings(s=>({...s,edgeThreshold:Number(e.target.value)||0}))} /></div>
+            <div className="field"><label>Suggested odds multiplier</label><input className="input" value={settings.suggestedMultiplier} onChange={(e)=>setSettings(s=>({...s,suggestedMultiplier:Number(e.target.value)||1}))} /></div>
+            <div className="field"><label>Strong stake</label><input className="input" value={settings.stakeStrong} onChange={(e)=>setSettings(s=>({...s,stakeStrong:Number(e.target.value)||0}))} /></div>
+            <div className="field"><label>Good stake</label><input className="input" value={settings.stakeGood} onChange={(e)=>setSettings(s=>({...s,stakeGood:Number(e.target.value)||0}))} /></div>
+            <div className="field"><label>Lean stake</label><input className="input" value={settings.stakeLean} onChange={(e)=>setSettings(s=>({...s,stakeLean:Number(e.target.value)||0}))} /></div>
           </div>
-        </section>
+          <div className="pillRow">
+            <button className={`pill ${settings.homeAwayBoost ? "active" : ""}`} onClick={()=>setSettings(s=>({...s,homeAwayBoost:!s.homeAwayBoost}))}>{settings.homeAwayBoost?"Home/Away boost on":"Home/Away boost off"}</button>
+            <button className={`pill ${settings.knockoutMode ? "active" : ""}`} onClick={()=>setSettings(s=>({...s,knockoutMode:!s.knockoutMode}))}>{settings.knockoutMode?"Knockout mode on":"Knockout mode off"}</button>
+          </div>
+          <div className="actions"><button className="btn danger" onClick={clearSaved}>Clear all saved browser data</button></div>
+        </div></section>
       )}
     </div></main>
   );
