@@ -98,11 +98,16 @@ details.bulkBox>summary::-webkit-details-marker{display:none}
 @media (max-width:1100px){.dashboardGrid{grid-template-columns:repeat(2,1fr)}.mainGrid,.trackerGrid,.avgGrid{grid-template-columns:1fr}}
 @media (max-width:760px){.page{padding:8px}.hero,.dashboardGrid,.formGrid,.resultMetrics,.resultGrid,.bestStats,.trackerGrid,.topTabs,.avgList{grid-template-columns:1fr}.title{font-size:26px}.pickName{font-size:23px}.decision{flex-direction:column;align-items:flex-start}.tableWrap{display:none}}
 
-.helperText{margin-top:6px;color:var(--muted);font-size:12px;line-height:1.45}
-.rangeGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}
-.rangeStat{background:rgba(7,11,16,.55);border:1px solid var(--line);border-radius:14px;padding:11px}
-.rangeStat .k{font-size:11px;color:var(--muted);margin-bottom:4px}
-.rangeStat .v{font-size:16px;font-weight:900}
-.infoBox{margin-top:12px;padding:12px 14px;border-radius:14px;border:1px solid rgba(159,176,199,.2);background:rgba(159,176,199,.08);color:var(--text)}
-.infoBox strong{color:#fff}
-@media (max-width:760px){.rangeGrid{grid-template-columns:1fr}}
+
+.filterRow{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 14px}
+.filterChip{padding:9px 12px;border-radius:999px;border:1px solid var(--line);background:rgba(7,11,16,.55);font-size:12px;color:var(--muted)}
+.syncGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cloudStatus{margin-top:12px;padding:12px 14px;border-radius:14px;border:1px solid rgba(56,189,248,.28);background:rgba(56,189,248,.08);color:#c9f0ff}
+.marketRoiGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px}
+.groupTitle{font-size:15px;font-weight:900;margin:16px 0 8px}
+.helperList{margin:0;padding-left:18px;color:var(--muted);font-size:13px;line-height:1.45}
+.codeBlock{white-space:pre-wrap;background:rgba(7,11,16,.55);border:1px solid var(--line);border-radius:14px;padding:12px;font-size:12px;color:#d9e7f7}
+.subtle{opacity:.72}
+.inlineWarn{font-size:12px;color:#ffd590;margin-top:6px}
+@media (max-width:1100px){.syncGrid,.marketRoiGrid{grid-template-columns:1fr 1fr}}
+@media (max-width:760px){.syncGrid,.marketRoiGrid{grid-template-columns:1fr}}
