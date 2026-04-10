@@ -461,7 +461,7 @@ export default function App(){
             <div className="dashboardGrid" style={{marginBottom:12}}>
               <div className="kpi"><div className="k">Settled</div><div className="v">{trackerStats.settled}</div></div>
               <div className="kpi"><div className="k">Win rate</div><div className="v">{trackerStats.winrate.toFixed(1)}%</div></div>
-              <div className="kpi"><div className="k">Profit</div><div className="v">{trackerStats.profit.toFixed(2)}</div></div>
+              <div className="kpi"><div className="k">Profit</div><div className="v">{`£${trackerStats.profit.toFixed(2)}`}</div></div>
               <div className="kpi"><div className="k">ROI</div><div className="v">{trackerStats.roi.toFixed(1)}%</div></div>
             </div>
             <div className="dashboardGrid" style={{marginBottom:12}}>
@@ -477,7 +477,15 @@ export default function App(){
               </div>
               {graphPoints.length ? (
                 <svg viewBox="0 0 320 90" className="profitGraph" preserveAspectRatio="none">
-                  <path d={graphPath} className="profitPath" />
+                  {graphPoints.length > 1 ? <path d={graphPath} className="profitPath" /> : null}
+                  {graphPoints.length === 1 ? (
+                    <circle
+                      className="profitDot"
+                      cx="160"
+                      cy="45"
+                      r="5"
+                    />
+                  ) : null}
                 </svg>
               ) : (
                 <div className="small">Add tracked bets to see the graph.</div>

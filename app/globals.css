@@ -107,3 +107,5 @@ details.bulkBox>summary::-webkit-details-marker{display:none}
 .graphHead{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px}
 .profitGraph{width:100%;height:90px;display:block;background:rgba(7,11,16,.42);border:1px solid var(--line);border-radius:14px}
 .profitPath{fill:none;stroke:#22c55e;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+
+.profitDot{fill:#22c55e;stroke:#22c55e}
