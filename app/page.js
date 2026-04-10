@@ -134,7 +134,9 @@ export default function App(){
   const singleResult=useMemo(()=>analyseRow({...active, market}, settings),[active,market,settings]);
   const analysedRows=useMemo(()=>rows.map(r=>analyseRow(r,settings)).filter(Boolean).sort((a,b)=>b.edge-a.edge),[rows,settings]);
   const strongCount=analysedRows.filter(r=>r.confidence==="Strong").length; const bestRow=analysedRows[0]||null;
-  const trackerStats=useMemo(()=>{ const settled=tracked.filter(x=>x.result!=="Pending"); const wins=settled.filter(x=>x.result==="Won").length; const losses=settled.filter(x=>x.result==="Lost").length; const profit=settled.reduce((sum,x)=> x.result==="Won" ? sum+((Number(x.odds)-1)*Number(x.stake)) : x.result==="Lost" ? sum-Number(x.stake) : sum ,0); const stake=settled.filter(x=>x.result!=="Void").reduce((sum,x)=>sum+Number(x.stake),0); const roi=stake>0?(profit/stake)*100:0; const winrate=(wins+losses)>0?(wins/(wins+losses))*100:0; return {settled: settled.length, profit, roi, winrate}; },[tracked]);
+  const trackerStats=useMemo(()=>{ const settled=tracked.filter(x=>x.result!=="Pending"); const wins=settled.filter(x=>x.result==="Won").length; const losses=settled.filter(x=>x.result==="Lost").length; const totalBets=wins+losses; const pending=tracked.filter(x=>x.result==="Pending").length; const profit=settled.reduce((sum,x)=> x.result==="Won" ? sum+((Number(x.odds)-1)*Number(x.stake)) : x.result==="Lost" ? sum-Number(x.stake) : sum ,0); const stake=settled.filter(x=>x.result!=="Void").reduce((sum,x)=>sum+Number(x.stake),0); const roi=stake>0?(profit/stake)*100:0; const winrate=(wins+losses)>0?(wins/(wins+losses))*100:0; return {settled: settled.length, profit, roi, winrate, wins, losses, totalBets, pending}; },[tracked]);
+
+  const graphPoints=useMemo(()=>trackerPoints(tracked),[tracked]); const graphPath=useMemo(()=>trackerGraphPath(graphPoints),[graphPoints]);
 
   const avgResult=useMemo(()=>{
     const hf=parseSeries(avgCalc.homeForSeries), ha=parseSeries(avgCalc.homeAgainstSeries), af=parseSeries(avgCalc.awayForSeries), aa=parseSeries(avgCalc.awayAgainstSeries);
@@ -456,11 +458,30 @@ export default function App(){
         <section className="trackerGrid">
           <div className="card">
             <h2 className="sectionTitle">Tracker Summary</h2>
-            <div className="dashboardGrid" style={{marginBottom:0}}>
+            <div className="dashboardGrid" style={{marginBottom:12}}>
               <div className="kpi"><div className="k">Settled</div><div className="v">{trackerStats.settled}</div></div>
               <div className="kpi"><div className="k">Win rate</div><div className="v">{trackerStats.winrate.toFixed(1)}%</div></div>
               <div className="kpi"><div className="k">Profit</div><div className="v">{trackerStats.profit.toFixed(2)}</div></div>
               <div className="kpi"><div className="k">ROI</div><div className="v">{trackerStats.roi.toFixed(1)}%</div></div>
+            </div>
+            <div className="dashboardGrid" style={{marginBottom:12}}>
+              <div className="kpi"><div className="k">Total bets</div><div className="v">{trackerStats.totalBets}</div></div>
+              <div className="kpi"><div className="k">Won</div><div className="v">{trackerStats.wins}</div></div>
+              <div className="kpi"><div className="k">Lost</div><div className="v">{trackerStats.losses}</div></div>
+              <div className="kpi"><div className="k">Pending</div><div className="v">{trackerStats.pending}</div></div>
+            </div>
+            <div className="graphCard">
+              <div className="graphHead">
+                <div className="k">Profit line</div>
+                <div className="small">Running profit across tracked bets</div>
+              </div>
+              {graphPoints.length ? (
+                <svg viewBox="0 0 320 90" className="profitGraph" preserveAspectRatio="none">
+                  <path d={graphPath} className="profitPath" />
+                </svg>
+              ) : (
+                <div className="small">Add tracked bets to see the graph.</div>
+              )}
             </div>
           </div>
           <div className="card">
