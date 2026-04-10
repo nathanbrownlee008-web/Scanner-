@@ -42,45 +42,35 @@ function analyseRow(row, settings){
   const modelOver=probOverAsian(line,expectedTotal), modelUnder=1-modelOver;
   const {fairOver,fairUnder}=fairProbsFromOdds(overOdds,underOdds);
 
-  const probEdgeOver=(modelOver-fairOver)*100;
-  const probEdgeUnder=(modelUnder-fairUnder)*100;
+  const overProbEdge=(modelOver-fairOver)*100, underProbEdge=(modelUnder-fairUnder)*100;
+  const fairOverOdds=modelOver>0?1/modelOver:0, fairUnderOdds=modelUnder>0?1/modelUnder:0;
+  const suggestedOverOdds=fairOverOdds*settings.suggestedMultiplier, suggestedUnderOdds=fairUnderOdds*settings.suggestedMultiplier;
 
-  const fairOverOdds=modelOver>0?1/modelOver:0;
-  const fairUnderOdds=modelUnder>0?1/modelUnder:0;
-  const suggestedOverOdds=fairOverOdds*settings.suggestedMultiplier;
-  const suggestedUnderOdds=fairUnderOdds*settings.suggestedMultiplier;
-
-  const evOver=((modelOver*overOdds)-1)*100;
-  const evUnder=((modelUnder*underOdds)-1)*100;
+  const overEV=(overOdds*modelOver - 1)*100;
+  const underEV=(underOdds*modelUnder - 1)*100;
 
   const threshold=settings.edgeThreshold;
   let side="skip", pick="SKIP", edge=0;
-  if(evOver>threshold && evOver>evUnder){ side="over"; pick=`OVER ${line}`; edge=evOver; }
-  else if(evUnder>threshold && evUnder>evOver){ side="under"; pick=`UNDER ${line}`; edge=evUnder; }
+  if(overEV>threshold&&overEV>underEV){side="over";pick=`OVER ${line}`;edge=overEV;}
+  else if(underEV>threshold&&underEV>overEV){side="under";pick=`UNDER ${line}`;edge=underEV;}
 
   const confidence=confFromEdge(edge);
   const confidenceScore=Math.max(0,Math.min(10,edge/1.5));
   const volatility=Math.abs(expectedTotal-line)<0.15?"High variance":"Normal";
 
-  let explanation="No clear value. Price is not high enough versus your model fair odds.";
-  if(side==="over"){
-    explanation=`Over is value because book odds ${num(overOdds)} are above model fair odds ${num(fairOverOdds)}, creating EV of ${evOver.toFixed(1)}%.`;
-  } else if(side==="under"){
-    explanation=`Under is value because book odds ${num(underOdds)} are above model fair odds ${num(fairUnderOdds)}, creating EV of ${evUnder.toFixed(1)}%.`;
-  } else {
-    if (overOdds < fairOverOdds || underOdds < fairUnderOdds) {
-      explanation=`False edge warning: model probability may lean one side, but the current price is below fair odds, so EV is negative.`;
-    }
-  }
+  const falseEdgeWarning =
+    overProbEdge > 0 && overEV <= 0 ? "Over has a probability lean but the price is too low." :
+    underProbEdge > 0 && underEV <= 0 ? "Under has a probability lean but the price is too low." :
+    "";
 
-  return {
-    ...row,
-    expectedHome, expectedAway, expectedTotal, modelOver, modelUnder, fairOver, fairUnder,
-    probEdgeOver, probEdgeUnder, evOver, evUnder,
-    overEdge: evOver, underEdge: evUnder,
-    side, pick, edge, confidence, fairOverOdds, fairUnderOdds, suggestedOverOdds, suggestedUnderOdds,
-    trueLine:expectedTotal, confidenceScore, volatility, explanation
-  };
+  const explanation=
+    side==="over" ? `Model over ${pct(modelOver)} beats bookmaker fair ${pct(fairOver)} and current odds ${num(overOdds)} are above fair odds ${num(fairOverOdds)}.` :
+    side==="under" ? `Model under ${pct(modelUnder)} beats bookmaker fair ${pct(fairUnder)} and current odds ${num(underOdds)} are above fair odds ${num(fairUnderOdds)}.` :
+    falseEdgeWarning || "No value bet at current price.";
+
+  return {...row, expectedHome, expectedAway, expectedTotal, modelOver, modelUnder, fairOver, fairUnder,
+    overProbEdge, underProbEdge, overEV, underEV, side, pick, edge, confidence, fairOverOdds, fairUnderOdds,
+    suggestedOverOdds, suggestedUnderOdds, trueLine:expectedTotal, confidenceScore, volatility, explanation, falseEdgeWarning};
 }
 const pct=v=>`${(v*100).toFixed(1)}%`; const num=v=>Number(v).toFixed(2);
 
@@ -297,14 +287,14 @@ export default function App(){
               <div className="resultMetrics">
                 <div className="metric"><div className="k">Expected total</div><div className="v">{num(singleResult.expectedTotal)}</div></div>
                 <div className="metric"><div className="k">True line</div><div className="v">{num(singleResult.trueLine)}</div></div>
-                <div className="metric"><div className="k">True EV</div><div className="v">{singleResult.edge.toFixed(1)}%</div></div>
+                <div className="metric"><div className="k">EV</div><div className="v">{singleResult.edge.toFixed(1)}%</div></div>
                 <div className="metric"><div className="k">Confidence</div><div className="v">{singleResult.confidenceScore.toFixed(1)}/10</div></div>
               </div>
               <div className="resultGrid">
-                <div className="detail"><h4>Model probabilities</h4><p>Over: {pct(singleResult.modelOver)}</p><p>Under: {pct(singleResult.modelUnder)}</p><p>Model fair odds: Over {num(singleResult.fairOverOdds)} · Under {num(singleResult.fairUnderOdds)}</p></div>
-                <div className="detail"><h4>Book fair probabilities</h4><p>Over: {pct(singleResult.fairOver)}</p><p>Under: {pct(singleResult.fairUnder)}</p><p>Book odds: Over {active.overOdds || "-"} · Under {active.underOdds || "-"}</p></div>
-                <div className={`detail ${singleResult.side==="over"?"":"dim"}`}><h4>Over fair / suggested</h4><p>Fair odds: {num(singleResult.fairOverOdds)}</p><p>Suggested odds: {num(singleResult.suggestedOverOdds)}</p><p>EV at current price: {singleResult.evOver.toFixed(1)}%</p><p>Probability edge: {singleResult.probEdgeOver.toFixed(1)}%</p></div>
-                <div className={`detail ${singleResult.side==="under"?"":"dim"}`}><h4>Under fair / suggested</h4><p>Fair odds: {num(singleResult.fairUnderOdds)}</p><p>Suggested odds: {num(singleResult.suggestedUnderOdds)}</p><p>EV at current price: {singleResult.evUnder.toFixed(1)}%</p><p>Probability edge: {singleResult.probEdgeUnder.toFixed(1)}%</p></div>
+                <div className="detail"><h4>Model probabilities</h4><p>Over: {pct(singleResult.modelOver)}</p><p>Under: {pct(singleResult.modelUnder)}</p></div>
+                <div className="detail"><h4>Book fair probabilities</h4><p>Over: {pct(singleResult.fairOver)}</p><p>Under: {pct(singleResult.fairUnder)}</p></div>
+                <div className={`detail ${singleResult.side==="over"?"":"dim"}`}><h4>Over fair / suggested</h4><p>Fair odds: {num(singleResult.fairOverOdds)}</p><p>Suggested odds: {num(singleResult.suggestedOverOdds)}</p><p>Book odds: {num(active.overOdds || 0)}</p><p>EV: {singleResult.overEV.toFixed(1)}%</p><p>Prob edge: {singleResult.overProbEdge.toFixed(1)}%</p></div>
+                <div className={`detail ${singleResult.side==="under"?"":"dim"}`}><h4>Under fair / suggested</h4><p>Fair odds: {num(singleResult.fairUnderOdds)}</p><p>Suggested odds: {num(singleResult.suggestedUnderOdds)}</p><p>Book odds: {num(active.underOdds || 0)}</p><p>EV: {singleResult.underEV.toFixed(1)}%</p><p>Prob edge: {singleResult.underProbEdge.toFixed(1)}%</p></div>
               </div>
               <div className="edgeMeter">
                 <div className="edgeBar">
@@ -316,9 +306,9 @@ export default function App(){
               </div>
               <div className="decision">
                 <div className={`decisionText ${singleResult.side==="skip"?"skip":singleResult.confidence==="Strong"?"strong":singleResult.confidence==="Good"?"good":"lean"}`}>
-                  {singleResult.side==="skip"?"NO BET":`${singleResult.confidence.toUpperCase()} ${singleResult.pick} (${singleResult.edge.toFixed(1)}%)`}
+                  {singleResult.side==="skip"?"PASS":`${singleResult.confidence.toUpperCase()} ${singleResult.pick} (EV ${singleResult.edge.toFixed(1)}%)`}
                 </div>
-                <div className="small">{singleResult.explanation} · {singleResult.volatility}</div>
+                <div className="small">{singleResult.explanation}{singleResult.falseEdgeWarning ? ` Warning: ${singleResult.falseEdgeWarning}` : ""} · {singleResult.volatility}</div>
               </div>
             </>}
           </div>
@@ -337,7 +327,7 @@ export default function App(){
                     <div className={badgeClass(row.confidence)}>{row.confidence}</div>
                   </div>
                   <div className="bestStats">
-                    <div className="bestStat"><div className="k">Edge</div><div className="v">{row.edge.toFixed(1)}%</div></div>
+                    <div className="bestStat"><div className="k">EV</div><div className="v">{row.edge.toFixed(1)}%</div></div>
                     <div className="bestStat"><div className="k">True line</div><div className="v">{num(row.trueLine)}</div></div>
                     <div className="bestStat"><div className="k">Fair</div><div className="v">{row.side==="over"?num(row.fairOverOdds):num(row.fairUnderOdds)}</div></div>
                     <div className="bestStat"><div className="k">Suggested</div><div className="v">{row.side==="over"?num(row.suggestedOverOdds):num(row.suggestedUnderOdds)}</div></div>
