@@ -1,5 +1,5 @@
 {
-  "name": "value-scanner-all-upgrades",
+  "name": "value-scanner-phase6-2",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,7 +9,6 @@
   "dependencies": {
     "next": "14.2.5",
     "react": "18.2.0",
-    "react-dom": "18.2.0",
-    "@supabase/supabase-js": "^2.49.8"
+    "react-dom": "18.2.0"
   }
 }
