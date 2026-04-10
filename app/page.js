@@ -105,7 +105,7 @@ function analyseRow(row, settings){
       guideTitle=`Close on UNDER ${line}, but the current price is still too low.`;
     }
   }
-  const confidence=confFromEdge(edge), confidenceScore=Math.max(0,Math.min(10,edge/1.5)), volatility=Math.abs(expectedTotal-line)<0.15?"High variance":"Normal";
+  const confidence=confFromEdge(edge), confidenceScore=Math.max(0,Math.min(10,edge/1.5)), volatility=Math.abs(expectedTotal-line)<0.15?"High variance — close to line":"Normal";
   const explanation=
     side==="over" ? `The market is too heavily weighted toward UNDER compared with its true probability, so OVER ${line} is priced better than your model says it should be.` :
     side==="under" ? `The market is too heavily weighted toward OVER compared with its true probability, so UNDER ${line} is priced better than your model says it should be.` :
@@ -495,23 +495,45 @@ export default function App(){
           <div className="card">
             <h2 className="sectionTitle">Tracked Bets</h2>
             {tracked.length===0?<p className="muted">No tracked bets yet.</p>:(
-              <div className="tableWrap">
-                <table className="table">
-                  <thead><tr><th>Match</th><th>Pick</th><th>Odds</th><th>Stake</th><th>Edge</th><th>Result</th></tr></thead>
-                  <tbody>
-                    {tracked.map((row)=>(
-                      <tr key={row.id}>
-                        <td>{row.match}<div className="small">{row.market} · {row.confidence}</div></td>
-                        <td>{row.pick}</td>
-                        <td><input className="input" value={row.odds} onChange={(e)=>updateTracked(row.id,"odds",e.target.value)} /></td>
-                        <td><input className="input" value={row.stake} onChange={(e)=>updateTracked(row.id,"stake",e.target.value)} /></td>
-                        <td>{Number(row.edge).toFixed(1)}%</td>
-                        <td><select className="input" value={row.result} onChange={(e)=>updateTracked(row.id,"result",e.target.value)}><option>Pending</option><option>Won</option><option>Lost</option><option>Void</option></select></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <div className="mobileTrackedList">
+                  {tracked.map((row)=>(
+                    <div className="mobileTrackedCard" key={`mobile-${row.id}`}>
+                      <div className="mobileTrackedTop">
+                        <div>
+                          <div className="mobileTrackedMatch">{row.match}</div>
+                          <div className="small">{row.market} · {row.confidence}</div>
+                        </div>
+                        <div className="small">{Number(row.edge).toFixed(1)}%</div>
+                      </div>
+                      <div className="mobileTrackedGrid">
+                        <div className="mobileTrackedCell"><span>Pick</span><strong>{row.pick}</strong></div>
+                        <div className="mobileTrackedCell"><span>Odds</span><input className="input" value={row.odds} onChange={(e)=>updateTracked(row.id,"odds",e.target.value)} /></div>
+                        <div className="mobileTrackedCell"><span>Stake</span><input className="input" value={row.stake} onChange={(e)=>updateTracked(row.id,"stake",e.target.value)} /></div>
+                        <div className="mobileTrackedCell"><span>Result</span><select className="input" value={row.result} onChange={(e)=>updateTracked(row.id,"result",e.target.value)}><option>Pending</option><option>Won</option><option>Lost</option><option>Void</option></select></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="tableWrap desktopTrackedTable">
+                  <table className="table">
+                    <thead><tr><th>Match</th><th>Pick</th><th>Odds</th><th>Stake</th><th>Edge</th><th>Result</th></tr></thead>
+                    <tbody>
+                      {tracked.map((row)=>(
+                        <tr key={row.id}>
+                          <td>{row.match}<div className="small">{row.market} · {row.confidence}</div></td>
+                          <td>{row.pick}</td>
+                          <td><input className="input" value={row.odds} onChange={(e)=>updateTracked(row.id,"odds",e.target.value)} /></td>
+                          <td><input className="input" value={row.stake} onChange={(e)=>updateTracked(row.id,"stake",e.target.value)} /></td>
+                          <td>{Number(row.edge).toFixed(1)}%</td>
+                          <td><select className="input" value={row.result} onChange={(e)=>updateTracked(row.id,"result",e.target.value)}><option>Pending</option><option>Won</option><option>Lost</option><option>Void</option></select></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         </section>
