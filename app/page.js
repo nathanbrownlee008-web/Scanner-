@@ -107,8 +107,8 @@ function analyseRow(row, settings){
   }
   const confidence=confFromEdge(edge), confidenceScore=Math.max(0,Math.min(10,edge/1.5)), volatility=Math.abs(expectedTotal-line)<0.15?"High variance":"Normal";
   const explanation=
-    side==="over" ? `Bookmaker has overpriced the UNDER side, so OVER ${line} is the value side at the current price.` :
-    side==="under" ? `Bookmaker has overpriced the OVER side, so UNDER ${line} is the value side at the current price.` :
+    side==="over" ? `The market is too heavily weighted toward UNDER compared with its true probability, so OVER ${line} is priced better than your model says it should be.` :
+    side==="under" ? `The market is too heavily weighted toward OVER compared with its true probability, so UNDER ${line} is priced better than your model says it should be.` :
     actionLabel.startsWith("WAIT") ? `Do not bet yet. You only enter if the price improves to your target odds and the game state still suits the pick.` :
     `No value at the current odds. Avoid forcing a bet here.`;
   return {...row, expectedHome, expectedAway, expectedTotal, modelOver, modelUnder, fairOver, fairUnder, overEdge, underEdge, side, pick, edge, actionLabel, targetOdds, guideTitle, confidence, fairOverOdds, fairUnderOdds, suggestedOverOdds, suggestedUnderOdds, trueLine:expectedTotal, confidenceScore, volatility, explanation};
