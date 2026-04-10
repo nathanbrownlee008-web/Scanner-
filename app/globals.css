@@ -99,3 +99,11 @@ details.bulkBox>summary::-webkit-details-marker{display:none}
 @media (max-width:760px){.page{padding:8px}.hero,.dashboardGrid,.formGrid,.resultMetrics,.resultGrid,.bestStats,.trackerGrid,.topTabs,.avgList{grid-template-columns:1fr}.title{font-size:26px}.pickName{font-size:23px}.decision{flex-direction:column;align-items:flex-start}.tableWrap{display:none}}
 
 .inlineWarn{font-size:12px;color:#ffd590;margin-top:6px}
+
+.edgeFill.conf-low{background:linear-gradient(90deg,#ef4444,#b91c1c)!important}
+.edgeFill.conf-mid{background:linear-gradient(90deg,#f59e0b,#fbbf24)!important}
+.edgeFill.conf-high{background:linear-gradient(90deg,#22c55e,#16a34a)!important}
+.graphCard{background:rgba(7,11,16,.48);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px}
+.graphHead{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px}
+.profitGraph{width:100%;height:90px;display:block;background:rgba(7,11,16,.42);border:1px solid var(--line);border-radius:14px}
+.profitPath{fill:none;stroke:#22c55e;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}

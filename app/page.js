@@ -40,6 +40,32 @@ function poissonCdf(k, lambda){ if (k < 0) return 0; let sum=0; for(let i=0;i<=k
 function probOverAsian(line, lambda){ const whole=Math.floor(line); const frac=+(line-whole).toFixed(2); if (Math.abs(frac-0.5)<0.01) return 1-poissonCdf(whole,lambda); if (Math.abs(frac-0.0)<0.01) return 1-poissonCdf(whole,lambda); if (Math.abs(frac-0.25)<0.01){const p1=1-poissonCdf(whole,lambda); const p2=1-poissonCdf(whole,lambda); return (p1+p2)/2;} if (Math.abs(frac-0.75)<0.01){const p1=1-poissonCdf(whole,lambda); const p2=1-poissonCdf(whole+1,lambda); return (p1+p2)/2;} return 1-poissonCdf(Math.floor(line),lambda);}
 function fairProbsFromOdds(overOdds, underOdds){ const pO=1/overOdds; const pU=1/underOdds; const total=pO+pU; return { fairOver:pO/total, fairUnder:pU/total }; }
 function edgeWidth(edge){ const clamped=Math.max(-10,Math.min(10,edge)); return Math.abs(clamped)*5; }
+
+function confidenceBarClass(label){
+  if ((label||"").startsWith("VALUE BET")) return "conf-high";
+  if ((label||"").startsWith("WAIT")) return "conf-mid";
+  return "conf-low";
+}
+function trackerPoints(tracked){
+  let running = 0;
+  return tracked.slice().reverse().map((x, idx) => {
+    if (x.result === "Won") running += ((Number(x.odds)-1) * Number(x.stake));
+    else if (x.result === "Lost") running -= Number(x.stake);
+    return { x: idx, y: running };
+  });
+}
+function trackerGraphPath(points, width=320, height=90){
+  if (!points.length) return "";
+  const ys = points.map(p=>p.y);
+  const minY = Math.min(0, ...ys);
+  const maxY = Math.max(0, ...ys);
+  const range = (maxY - minY) || 1;
+  return points.map((p, i) => {
+    const x = points.length === 1 ? width/2 : (p.x / (points.length-1)) * width;
+    const y = height - ((p.y - minY) / range) * (height - 8) - 4;
+    return `${i===0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+  }).join(" ");
+}
 function confFromEdge(edge){ if(edge>=8)return"Strong"; if(edge>=5)return"Good"; if(edge>=3)return"Lean"; return"Low"; }
 
 function analyseRow(row, settings){
@@ -365,8 +391,8 @@ export default function App(){
               <div className="edgeMeter">
                 <div className="edgeBar">
                   <div className="edgeCenter"></div>
-                  {singleResult.overEdge > 0 && <div className="edgeFill over" style={{width: edgeWidth(singleResult.overEdge) + "%"}}></div>}
-                  {singleResult.underEdge > 0 && <div className="edgeFill under" style={{width: edgeWidth(singleResult.underEdge) + "%"}}></div>}
+                  {singleResult.overEdge > 0 && <div className={`edgeFill over ${confidenceBarClass(singleResult.actionLabel)}`} style={{width: edgeWidth(singleResult.overEdge) + "%"}}></div>}
+                  {singleResult.underEdge > 0 && <div className={`edgeFill under ${confidenceBarClass(singleResult.actionLabel)}`} style={{width: edgeWidth(singleResult.underEdge) + "%"}}></div>}
                 </div>
                 <div className="edgeLabels"><span>UNDER</span><span>OVER</span></div>
               </div>
