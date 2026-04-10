@@ -38,39 +38,16 @@ function analyseRow(row, settings){
   const marketAdjust={goals:1.0,sot:1.0,corners:1.03,cards:1.02}; expectedTotal*=marketAdjust[market]||1;
   if (settings.knockoutMode && (market==="goals"||market==="sot")) expectedTotal*=0.96;
   if (settings.knockoutMode && market==="cards") expectedTotal*=1.03;
-
   const modelOver=probOverAsian(line,expectedTotal), modelUnder=1-modelOver;
   const {fairOver,fairUnder}=fairProbsFromOdds(overOdds,underOdds);
-
-  const overProbEdge=(modelOver-fairOver)*100, underProbEdge=(modelUnder-fairUnder)*100;
-  const fairOverOdds=modelOver>0?1/modelOver:0, fairUnderOdds=modelUnder>0?1/modelUnder:0;
-  const suggestedOverOdds=fairOverOdds*settings.suggestedMultiplier, suggestedUnderOdds=fairUnderOdds*settings.suggestedMultiplier;
-
-  const overEV=(overOdds*modelOver - 1)*100;
-  const underEV=(underOdds*modelUnder - 1)*100;
-
+  const overEdge=(modelOver-fairOver)*100, underEdge=(modelUnder-fairUnder)*100;
   const threshold=settings.edgeThreshold;
   let side="skip", pick="SKIP", edge=0;
-  if(overEV>threshold&&overEV>underEV){side="over";pick=`OVER ${line}`;edge=overEV;}
-  else if(underEV>threshold&&underEV>overEV){side="under";pick=`UNDER ${line}`;edge=underEV;}
-
-  const confidence=confFromEdge(edge);
-  const confidenceScore=Math.max(0,Math.min(10,edge/1.5));
-  const volatility=Math.abs(expectedTotal-line)<0.15?"High variance":"Normal";
-
-  const falseEdgeWarning =
-    overProbEdge > 0 && overEV <= 0 ? "Over has a probability lean but the price is too low." :
-    underProbEdge > 0 && underEV <= 0 ? "Under has a probability lean but the price is too low." :
-    "";
-
-  const explanation=
-    side==="over" ? `Model over ${pct(modelOver)} beats bookmaker fair ${pct(fairOver)} and current odds ${num(overOdds)} are above fair odds ${num(fairOverOdds)}.` :
-    side==="under" ? `Model under ${pct(modelUnder)} beats bookmaker fair ${pct(fairUnder)} and current odds ${num(underOdds)} are above fair odds ${num(fairUnderOdds)}.` :
-    falseEdgeWarning || "No value bet at current price.";
-
-  return {...row, expectedHome, expectedAway, expectedTotal, modelOver, modelUnder, fairOver, fairUnder,
-    overProbEdge, underProbEdge, overEV, underEV, side, pick, edge, confidence, fairOverOdds, fairUnderOdds,
-    suggestedOverOdds, suggestedUnderOdds, trueLine:expectedTotal, confidenceScore, volatility, explanation, falseEdgeWarning};
+  if(overEdge>threshold&&overEdge>underEdge){side="over";pick=`OVER ${line}`;edge=overEdge;}
+  else if(underEdge>threshold&&underEdge>overEdge){side="under";pick=`UNDER ${line}`;edge=underEdge;}
+  const confidence=confFromEdge(edge), fairOverOdds=modelOver>0?1/modelOver:0, fairUnderOdds=modelUnder>0?1/modelUnder:0, suggestedOverOdds=fairOverOdds*settings.suggestedMultiplier, suggestedUnderOdds=fairUnderOdds*settings.suggestedMultiplier, confidenceScore=Math.max(0,Math.min(10,edge/1.5)), volatility=Math.abs(expectedTotal-line)<0.15?"High variance":"Normal";
+  const explanation=side==="over"?"Model higher than market → OVER value.":side==="under"?"Market overpriced → UNDER value.":"No clear edge → skip.";
+  return {...row, expectedHome, expectedAway, expectedTotal, modelOver, modelUnder, fairOver, fairUnder, overEdge, underEdge, side, pick, edge, confidence, fairOverOdds, fairUnderOdds, suggestedOverOdds, suggestedUnderOdds, trueLine:expectedTotal, confidenceScore, volatility, explanation};
 }
 const pct=v=>`${(v*100).toFixed(1)}%`; const num=v=>Number(v).toFixed(2);
 
@@ -79,6 +56,8 @@ export default function App(){
   const [market,setMarket]=useState("goals");
   const [forms,setForms]=useState(DEFAULTS);
   const [bulkText,setBulkText]=useState("");
+  const [quickPaste,setQuickPaste]=useState("");
+  const [quickPasteMessage,setQuickPasteMessage]=useState("");
   const [rows,setRows]=useState([]);
   const [tracked,setTracked]=useState([]);
   const [settings,setSettings]=useState({edgeThreshold:3,suggestedMultiplier:1.05,homeAwayBoost:true,knockoutMode:false,stakeStrong:3,stakeGood:2,stakeLean:1});
@@ -86,7 +65,7 @@ export default function App(){
   const [loaded,setLoaded]=useState(false);
 
   useEffect(()=>{ try{ const raw=localStorage.getItem(STORAGE_KEY); if(raw){ const d=JSON.parse(raw); if(d.forms)setForms(d.forms); if(d.bulkText!==undefined)setBulkText(d.bulkText); if(d.rows)setRows(d.rows); if(d.tracked)setTracked(d.tracked); if(d.settings)setSettings(d.settings); if(d.market)setMarket(d.market); if(d.avgCalc)setAvgCalc(d.avgCalc);} }catch(e){} setLoaded(true); },[]);
-  useEffect(()=>{ if(!loaded)return; try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({forms,bulkText,rows,tracked,settings,market,avgCalc})); }catch(e){} },[forms,bulkText,rows,tracked,settings,market,avgCalc,loaded]);
+  useEffect(()=>{ if(!loaded)return; try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({forms,bulkText,rows,tracked,settings,market,avgCalc})); }catch(e){} },[forms,bulkText,quickPaste,rows,tracked,settings,market,avgCalc,loaded]);
 
   const active=forms[market]; const cfg=MARKET_CONFIG[market]; const avgCfg=MARKET_CONFIG[avgCalc.market];
   const singleResult=useMemo(()=>analyseRow({...active, market}, settings),[active,market,settings]);
@@ -112,6 +91,40 @@ export default function App(){
   const marketMismatch = likelyMarket && likelyMarket !== avgCalc.market;
 
   function update(field,value){ setForms(prev=>({...prev,[market]:{...prev[market],[field]:value}})); }
+
+  function importQuickPaste(){
+    const line = quickPaste.trim();
+    if(!line){
+      setQuickPasteMessage("Paste a line first.");
+      return;
+    }
+    const parts = line.split(",").map(x=>x.trim());
+    if(parts.length < 9){
+      setQuickPasteMessage("Need 9 comma-separated values: match,market,homeFor,homeAgainst,awayFor,awayAgainst,line,overOdds,underOdds");
+      return;
+    }
+    const marketKey = parts[1].toLowerCase();
+    if(!MARKET_CONFIG[marketKey]){
+      setQuickPasteMessage("Market must be one of: goals, corners, sot, cards");
+      return;
+    }
+    setMarket(marketKey);
+    setForms(prev=>({
+      ...prev,
+      [marketKey]: {
+        ...prev[marketKey],
+        match: parts[0],
+        homeFor: parts[2],
+        homeAgainst: parts[3],
+        awayFor: parts[4],
+        awayAgainst: parts[5],
+        line: parts[6],
+        overOdds: parts[7],
+        underOdds: parts[8]
+      }
+    }));
+    setQuickPasteMessage(`Imported into ${MARKET_CONFIG[marketKey].label} scanner.`);
+  }
   function loadAverageToScanner(){
     setMarket(avgCalc.market);
     setForms(prev=>({...prev,[avgCalc.market]:{...prev[avgCalc.market], match:avgCalc.match||prev[avgCalc.market].match, homeFor:avgResult.homeForAvg?avgResult.homeForAvg.toFixed(2):prev[avgCalc.market].homeFor, homeAgainst:avgResult.homeAgainstAvg?avgResult.homeAgainstAvg.toFixed(2):prev[avgCalc.market].homeAgainst, awayFor:avgResult.awayForAvg?avgResult.awayForAvg.toFixed(2):prev[avgCalc.market].awayFor, awayAgainst:avgResult.awayAgainstAvg?avgResult.awayAgainstAvg.toFixed(2):prev[avgCalc.market].awayAgainst }}));
@@ -254,6 +267,22 @@ export default function App(){
             </div>
             <h2 className="sectionTitle">{cfg.label} scanner</h2>
             <p className="sectionSub">{cfg.lineHint}</p>
+            <div className="card" style={{padding:"12px", marginTop:0, marginBottom:12}}>
+              <div className="field">
+                <label>Quick paste import</label>
+                <textarea
+                  className="textarea"
+                  value={quickPaste}
+                  onChange={(e)=>setQuickPaste(e.target.value)}
+                  placeholder="Bologna vs Aston Villa,corners,5.2,4.6,5.0,4.8,9.5,1.91,1.80"
+                />
+              </div>
+              <div className="small">Format: match,market,homeFor,homeAgainst,awayFor,awayAgainst,line,overOdds,underOdds</div>
+              {quickPasteMessage ? <div className="goodbox" style={{marginTop:10}}>{quickPasteMessage}</div> : null}
+              <div className="actions">
+                <button className="btn primary" onClick={importQuickPaste}>Import quick paste</button>
+              </div>
+            </div>
             <div className="formGrid">
               <div className="field full"><label>Match</label><input className="input" value={active.match} onChange={(e)=>update("match", e.target.value)} /></div>
               <div className="field"><label>Home {cfg.forLabel}</label><input className="input" value={active.homeFor} onChange={(e)=>update("homeFor", e.target.value)} /></div>
@@ -287,14 +316,14 @@ export default function App(){
               <div className="resultMetrics">
                 <div className="metric"><div className="k">Expected total</div><div className="v">{num(singleResult.expectedTotal)}</div></div>
                 <div className="metric"><div className="k">True line</div><div className="v">{num(singleResult.trueLine)}</div></div>
-                <div className="metric"><div className="k">EV</div><div className="v">{singleResult.edge.toFixed(1)}%</div></div>
+                <div className="metric"><div className="k">Edge</div><div className="v">{singleResult.edge.toFixed(1)}%</div></div>
                 <div className="metric"><div className="k">Confidence</div><div className="v">{singleResult.confidenceScore.toFixed(1)}/10</div></div>
               </div>
               <div className="resultGrid">
                 <div className="detail"><h4>Model probabilities</h4><p>Over: {pct(singleResult.modelOver)}</p><p>Under: {pct(singleResult.modelUnder)}</p></div>
                 <div className="detail"><h4>Book fair probabilities</h4><p>Over: {pct(singleResult.fairOver)}</p><p>Under: {pct(singleResult.fairUnder)}</p></div>
-                <div className={`detail ${singleResult.side==="over"?"":"dim"}`}><h4>Over fair / suggested</h4><p>Fair odds: {num(singleResult.fairOverOdds)}</p><p>Suggested odds: {num(singleResult.suggestedOverOdds)}</p><p>Book odds: {num(active.overOdds || 0)}</p><p>EV: {singleResult.overEV.toFixed(1)}%</p><p>Prob edge: {singleResult.overProbEdge.toFixed(1)}%</p></div>
-                <div className={`detail ${singleResult.side==="under"?"":"dim"}`}><h4>Under fair / suggested</h4><p>Fair odds: {num(singleResult.fairUnderOdds)}</p><p>Suggested odds: {num(singleResult.suggestedUnderOdds)}</p><p>Book odds: {num(active.underOdds || 0)}</p><p>EV: {singleResult.underEV.toFixed(1)}%</p><p>Prob edge: {singleResult.underProbEdge.toFixed(1)}%</p></div>
+                <div className={`detail ${singleResult.side==="over"?"":"dim"}`}><h4>Over fair / suggested</h4><p>Fair odds: {num(singleResult.fairOverOdds)}</p><p>Suggested odds: {num(singleResult.suggestedOverOdds)}</p></div>
+                <div className={`detail ${singleResult.side==="under"?"":"dim"}`}><h4>Under fair / suggested</h4><p>Fair odds: {num(singleResult.fairUnderOdds)}</p><p>Suggested odds: {num(singleResult.suggestedUnderOdds)}</p></div>
               </div>
               <div className="edgeMeter">
                 <div className="edgeBar">
@@ -306,9 +335,9 @@ export default function App(){
               </div>
               <div className="decision">
                 <div className={`decisionText ${singleResult.side==="skip"?"skip":singleResult.confidence==="Strong"?"strong":singleResult.confidence==="Good"?"good":"lean"}`}>
-                  {singleResult.side==="skip"?"PASS":`${singleResult.confidence.toUpperCase()} ${singleResult.pick} (EV ${singleResult.edge.toFixed(1)}%)`}
+                  {singleResult.side==="skip"?"NO BET":`${singleResult.confidence.toUpperCase()} ${singleResult.pick} (${singleResult.edge.toFixed(1)}%)`}
                 </div>
-                <div className="small">{singleResult.explanation}{singleResult.falseEdgeWarning ? ` Warning: ${singleResult.falseEdgeWarning}` : ""} · {singleResult.volatility}</div>
+                <div className="small">{singleResult.explanation} · {singleResult.volatility}</div>
               </div>
             </>}
           </div>
@@ -327,7 +356,7 @@ export default function App(){
                     <div className={badgeClass(row.confidence)}>{row.confidence}</div>
                   </div>
                   <div className="bestStats">
-                    <div className="bestStat"><div className="k">EV</div><div className="v">{row.edge.toFixed(1)}%</div></div>
+                    <div className="bestStat"><div className="k">Edge</div><div className="v">{row.edge.toFixed(1)}%</div></div>
                     <div className="bestStat"><div className="k">True line</div><div className="v">{num(row.trueLine)}</div></div>
                     <div className="bestStat"><div className="k">Fair</div><div className="v">{row.side==="over"?num(row.fairOverOdds):num(row.fairUnderOdds)}</div></div>
                     <div className="bestStat"><div className="k">Suggested</div><div className="v">{row.side==="over"?num(row.suggestedOverOdds):num(row.suggestedUnderOdds)}</div></div>
