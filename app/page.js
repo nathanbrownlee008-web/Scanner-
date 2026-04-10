@@ -55,12 +55,37 @@ function analyseRow(row, settings){
   const {fairOver,fairUnder}=fairProbsFromOdds(overOdds,underOdds);
   const overEdge=(modelOver-fairOver)*100, underEdge=(modelUnder-fairUnder)*100;
   const threshold=settings.edgeThreshold;
-  let side="skip", pick="SKIP", edge=0;
-  if(overEdge>threshold&&overEdge>underEdge){side="over";pick=`OVER ${line}`;edge=overEdge;}
-  else if(underEdge>threshold&&underEdge>overEdge){side="under";pick=`UNDER ${line}`;edge=underEdge;}
-  const confidence=confFromEdge(edge), fairOverOdds=modelOver>0?1/modelOver:0, fairUnderOdds=modelUnder>0?1/modelUnder:0, suggestedOverOdds=fairOverOdds*settings.suggestedMultiplier, suggestedUnderOdds=fairUnderOdds*settings.suggestedMultiplier, confidenceScore=Math.max(0,Math.min(10,edge/1.5)), volatility=Math.abs(expectedTotal-line)<0.15?"High variance":"Normal";
-  const explanation=side==="over"?"Model higher than market → OVER value.":side==="under"?"Market overpriced → UNDER value.":"No clear edge → skip.";
-  return {...row, expectedHome, expectedAway, expectedTotal, modelOver, modelUnder, fairOver, fairUnder, overEdge, underEdge, side, pick, edge, confidence, fairOverOdds, fairUnderOdds, suggestedOverOdds, suggestedUnderOdds, trueLine:expectedTotal, confidenceScore, volatility, explanation};
+  const waitThreshold=Math.max(0.5, threshold*0.5);
+  const fairOverOdds=modelOver>0?1/modelOver:0, fairUnderOdds=modelUnder>0?1/modelUnder:0;
+  const suggestedOverOdds=fairOverOdds*settings.suggestedMultiplier, suggestedUnderOdds=fairUnderOdds*settings.suggestedMultiplier;
+  let side="skip", pick="SKIP", edge=0, actionLabel="NO VALUE – AVOID", targetOdds=null, guideTitle="Avoid at current odds";
+  if(overEdge>threshold&&overEdge>underEdge){
+    side="over";pick=`OVER ${line}`;edge=overEdge; targetOdds=suggestedOverOdds;
+    actionLabel=`VALUE BET – TAKE OVER ${line} NOW`;
+    guideTitle=`Current odds are already good enough for OVER ${line}.`;
+  }
+  else if(underEdge>threshold&&underEdge>overEdge){
+    side="under";pick=`UNDER ${line}`;edge=underEdge; targetOdds=suggestedUnderOdds;
+    actionLabel=`VALUE BET – TAKE UNDER ${line} NOW`;
+    guideTitle=`Current odds are already good enough for UNDER ${line}.`;
+  } else if (Math.max(overEdge, underEdge) > waitThreshold) {
+    if (overEdge >= underEdge) {
+      targetOdds=suggestedOverOdds;
+      actionLabel=`WAIT – BET OVER ${line} IF ODDS REACH ${suggestedOverOdds.toFixed(2)}+ (IN-PLAY / DRIFT)`;
+      guideTitle=`Close on OVER ${line}, but the current price is still too low.`;
+    } else {
+      targetOdds=suggestedUnderOdds;
+      actionLabel=`WAIT – BET UNDER ${line} IF ODDS REACH ${suggestedUnderOdds.toFixed(2)}+ (IN-PLAY / DRIFT)`;
+      guideTitle=`Close on UNDER ${line}, but the current price is still too low.`;
+    }
+  }
+  const confidence=confFromEdge(edge), confidenceScore=Math.max(0,Math.min(10,edge/1.5)), volatility=Math.abs(expectedTotal-line)<0.15?"High variance":"Normal";
+  const explanation=
+    side==="over" ? `Bookmaker has overpriced the UNDER side, so OVER ${line} is the value side at the current price.` :
+    side==="under" ? `Bookmaker has overpriced the OVER side, so UNDER ${line} is the value side at the current price.` :
+    actionLabel.startsWith("WAIT") ? `Do not bet yet. You only enter if the price improves to your target odds and the game state still suits the pick.` :
+    `No value at the current odds. Avoid forcing a bet here.`;
+  return {...row, expectedHome, expectedAway, expectedTotal, modelOver, modelUnder, fairOver, fairUnder, overEdge, underEdge, side, pick, edge, actionLabel, targetOdds, guideTitle, confidence, fairOverOdds, fairUnderOdds, suggestedOverOdds, suggestedUnderOdds, trueLine:expectedTotal, confidenceScore, volatility, explanation};
 }
 const pct=v=>`${(v*100).toFixed(1)}%`; const num=v=>Number(v).toFixed(2);
 
@@ -346,10 +371,30 @@ export default function App(){
                 <div className="edgeLabels"><span>UNDER</span><span>OVER</span></div>
               </div>
               <div className="decision">
-                <div className={`decisionText ${singleResult.side==="skip"?"skip":singleResult.confidence==="Strong"?"strong":singleResult.confidence==="Good"?"good":"lean"}`}>
-                  {singleResult.side==="skip"?"NO BET":`${singleResult.confidence.toUpperCase()} ${singleResult.pick} (${singleResult.edge.toFixed(1)}%)`}
+                <div className={`decisionText ${singleResult.actionLabel.startsWith("VALUE BET")?"strong":singleResult.actionLabel.startsWith("WAIT")?"lean":"skip"}`}>
+                  {singleResult.actionLabel}
                 </div>
                 <div className="small">{singleResult.explanation} · {singleResult.volatility}</div>
+              </div>
+              <div className="detail" style={{marginTop:12}}>
+                <h4>Entry guide</h4>
+                <p>{singleResult.guideTitle}</p>
+                {singleResult.actionLabel.startsWith("WAIT") ? (
+                  <>
+                    <p>Target odds to look for: {singleResult.targetOdds ? singleResult.targetOdds.toFixed(2) : "-" }+</p>
+                    <p>What to look for: slower tempo, lower chance quality, no red cards, no big pressure against your side.</p>
+                  </>
+                ) : singleResult.actionLabel.startsWith("VALUE BET") ? (
+                  <>
+                    <p>Bet side: {singleResult.pick}</p>
+                    <p>Current book price is already better than your fair price.</p>
+                  </>
+                ) : (
+                  <>
+                    <p>No value at the current price.</p>
+                    <p>Avoid forcing a bet just because the match looks tempting.</p>
+                  </>
+                )}
               </div>
             </>}
           </div>
