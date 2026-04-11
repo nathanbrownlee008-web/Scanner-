@@ -5,14 +5,22 @@ const STORAGE_KEY = "value-scanner-phase6-2";
 
 const MARKET_CONFIG = {
   goals: { label: "Goals", emoji: "⚽", lineHint: "Usually 2.5, 3.5, 1.5 etc", forLabel: "Goals scored avg", againstLabel: "Goals conceded avg", typicalMin: 0, typicalMax: 3.5 },
+  btts: { label: "BTTS", emoji: "✅", lineHint: "Use goal averages. Over odds = YES, Under odds = NO", forLabel: "Goals scored avg", againstLabel: "Goals conceded avg", typicalMin: 0, typicalMax: 3.5 },
   sot: { label: "Shots on Target", emoji: "🎯", lineHint: "Usually 7.5–9.5", forLabel: "SOT for avg", againstLabel: "SOT against avg", typicalMin: 2, typicalMax: 8 },
+  team_sot: { label: "Team SOT", emoji: "🥅", lineHint: "Select home or away team target", forLabel: "Team SOT avg", againstLabel: "Opponent SOT conceded avg", typicalMin: 1, typicalMax: 6 },
+  match_shots: { label: "Match Shots", emoji: "📈", lineHint: "Usually 20.5–28.5", forLabel: "Shots for avg", againstLabel: "Shots against avg", typicalMin: 6, typicalMax: 16 },
+  team_shots: { label: "Team Shots", emoji: "💥", lineHint: "Select home or away team target", forLabel: "Team shots avg", againstLabel: "Opponent shots conceded avg", typicalMin: 3, typicalMax: 12 },
   corners: { label: "Corners", emoji: "🚩", lineHint: "Usually 8.5–10.5", forLabel: "Corners for avg", againstLabel: "Corners against avg", typicalMin: 3, typicalMax: 8 },
   cards: { label: "Cards", emoji: "🟨", lineHint: "Usually 3.5–5.5", forLabel: "Cards avg", againstLabel: "Cards against avg", typicalMin: 1, typicalMax: 4 },
 };
 
 const DEFAULTS = {
   goals: { match: "", homeFor: "", homeAgainst: "", awayFor: "", awayAgainst: "", line: "2.5", overOdds: "", underOdds: "" },
+  btts: { match: "", homeFor: "", homeAgainst: "", awayFor: "", awayAgainst: "", line: "0.5", overOdds: "", underOdds: "" },
   sot: { match: "", homeFor: "", homeAgainst: "", awayFor: "", awayAgainst: "", line: "8.5", overOdds: "", underOdds: "" },
+  team_sot: { match: "", homeFor: "", homeAgainst: "", awayFor: "", awayAgainst: "", line: "3.5", overOdds: "", underOdds: "" },
+  match_shots: { match: "", homeFor: "", homeAgainst: "", awayFor: "", awayAgainst: "", line: "23.5", overOdds: "", underOdds: "" },
+  team_shots: { match: "", homeFor: "", homeAgainst: "", awayFor: "", awayAgainst: "", line: "11.5", overOdds: "", underOdds: "" },
   corners: { match: "", homeFor: "", homeAgainst: "", awayFor: "", awayAgainst: "", line: "9.5", overOdds: "", underOdds: "" },
   cards: { match: "", homeFor: "", homeAgainst: "", awayFor: "", awayAgainst: "", line: "4.5", overOdds: "", underOdds: "" },
 };
@@ -41,6 +49,14 @@ function probOverAsian(line, lambda){ const whole=Math.floor(line); const frac=+
 function fairProbsFromOdds(overOdds, underOdds){ const pO=1/overOdds; const pU=1/underOdds; const total=pO+pU; return { fairOver:pO/total, fairUnder:pU/total }; }
 function edgeWidth(edge){ const clamped=Math.max(-10,Math.min(10,edge)); return Math.abs(clamped)*5; }
 
+function isBttsMarket(m){ return m === "btts"; }
+function isTeamMarket(m){ return m === "team_shots" || m === "team_sot"; }
+function sideName(match, side){
+  const bits = (match || "").split(/\s+vs\s+|\s+-\s+/i);
+  if (bits.length >= 2) return side === "home" ? bits[0].trim() : bits[1].trim();
+  return side === "home" ? "Home team" : "Away team";
+}
+
 function confidenceBarClass(label){
   if ((label||"").startsWith("VALUE BET")) return "conf-high";
   if ((label||"").startsWith("WAIT")) return "conf-mid";
@@ -65,44 +81,6 @@ function getVarianceInfo(expected, line){
     label: "Low variance",
     text: "Clear gap from the line — the model has stronger separation from the market line, so the prediction is more stable."
   };
-}
-
-function getStabilityProfile(expected, line, edge, market){
-  const diff = Math.abs(expected - line);
-  let factor = 1;
-  let label = "Stable";
-  let text = "The edge is being supported by a decent gap from the line.";
-
-  if (diff < 0.15) {
-    factor = 0.45;
-    label = "Very volatile";
-    text = "This is very close to the line, so small match events can flip the outcome quickly. Raw edge is heavily reduced.";
-  } else if (diff < 0.35) {
-    factor = 0.65;
-    label = "Volatile";
-    text = "This is still fairly close to the line, so the raw edge is trimmed to avoid fake high-confidence calls.";
-  } else if (diff < 0.60) {
-    factor = 0.82;
-    label = "Moderate";
-    text = "There is some separation from the line, but not enough to trust the full raw edge blindly.";
-  }
-
-  if ((market === "goals" || market === "btts") && edge >= 12) {
-    factor = Math.min(factor, 0.78);
-  }
-  if ((market === "team_shots" || market === "team_sot" || market === "match_shots") && edge >= 10) {
-    factor = Math.min(factor, 0.85);
-  }
-
-  return { factor, label, text };
-}
-
-function scoreFromAdjustedEdge(adjustedEdge, varianceLabel){
-  let score = adjustedEdge / 1.8;
-  if (varianceLabel === "High variance") score = Math.min(score, 6.2);
-  if (varianceLabel === "Medium variance") score = Math.min(score, 7.8);
-  if (varianceLabel === "Low variance") score = Math.min(score, 9.2);
-  return Math.max(0, Math.min(10, score));
 }
 function trackerPoints(tracked){
   let running = 0;
@@ -133,6 +111,45 @@ function getRating(edge){
 }
 function confFromEdge(edge){ if(edge>=8)return"Strong"; if(edge>=5)return"Good"; if(edge>=3)return"Lean"; return"Low"; }
 
+function getStabilityInfo(expected, line, market){
+  const diff = Math.abs(expected - line);
+  let factor = 1;
+  let label = "Stable";
+  let text = "Good separation from the line, so the raw edge is more trustworthy.";
+
+  if (diff < 0.12) {
+    factor = 0.42;
+    label = "Very volatile";
+    text = "This is extremely close to the line, so a tiny swing can flip the result. Confidence is heavily reduced.";
+  } else if (diff < 0.22) {
+    factor = 0.58;
+    label = "Volatile";
+    text = "Still close to the line, so the raw edge is trimmed to stop fake high-confidence calls.";
+  } else if (diff < 0.38) {
+    factor = 0.74;
+    label = "Moderate";
+    text = "Some gap exists, but not enough to trust the full raw edge blindly.";
+  } else if (diff < 0.55) {
+    factor = 0.88;
+    label = "Fair";
+    text = "Decent gap from the line. Confidence is only trimmed slightly.";
+  }
+
+  if ((market === "goals" || market === "btts") && diff < 0.30) factor = Math.min(factor, 0.65);
+  if ((market === "cards" || market === "corners") && diff < 0.25) factor = Math.min(factor, 0.72);
+  if ((market === "team_shots" || market === "team_sot" || market === "match_shots") && diff < 0.45) factor = Math.min(factor, 0.82);
+
+  return { factor, label, text };
+}
+
+function scoreFromAdjustedEdge(adjustedEdge, varianceLabel){
+  let score = adjustedEdge / 1.9;
+  if (varianceLabel === "High variance") score = Math.min(score, 6.0);
+  if (varianceLabel === "Medium variance") score = Math.min(score, 7.6);
+  if (varianceLabel === "Low variance") score = Math.min(score, 9.0);
+  return Math.max(0, Math.min(10, score));
+}
+
 function probabilityExplanation(modelOver, modelUnder, line, expectedTotal){
   const overPct = (modelOver * 100).toFixed(1);
   const underPct = (modelUnder * 100).toFixed(1);
@@ -147,7 +164,7 @@ function probabilityExplanation(modelOver, modelUnder, line, expectedTotal){
     varianceText = "Some separation from the line — still some volatility, but more stable than high variance.";
   }
   return {
-    summary: `Based on the averages entered, the model estimates OVER ${line} lands ${overPct}% of the time and UNDER ${line} lands ${underPct}% of the time.`,
+    summary: `Based on the averages entered, the model estimates the top side lands ${overPct}% of the time and the lower side lands ${underPct}% of the time.`,
     reasoning:
       expectedTotal > line
         ? `The expected total sits above the line, which pushes probability toward the OVER side.`
@@ -160,55 +177,150 @@ function probabilityExplanation(modelOver, modelUnder, line, expectedTotal){
 }
 
 function analyseRow(row, settings){
-  const homeFor=parseNum(row.homeFor), homeAgainst=parseNum(row.homeAgainst), awayFor=parseNum(row.awayFor), awayAgainst=parseNum(row.awayAgainst), line=parseNum(row.line), overOdds=parseNum(row.overOdds), underOdds=parseNum(row.underOdds), market=row.market;
+  const homeFor=parseNum(row.homeFor), homeAgainst=parseNum(row.homeAgainst), awayFor=parseNum(row.awayFor), awayAgainst=parseNum(row.awayAgainst), line=parseNum(row.line), overOdds=parseNum(row.overOdds), underOdds=parseNum(row.underOdds), market=row.market, teamSide=row.teamSide || "home";
   if ([homeFor,homeAgainst,awayFor,awayAgainst,line,overOdds,underOdds].some(v=>v==null||v<=0)) return null;
+
   const baseHome=(homeFor+awayAgainst)/2, baseAway=(awayFor+homeAgainst)/2;
   const homeBoost=settings.homeAwayBoost?1.04:1, awayBoost=settings.homeAwayBoost?0.98:1;
   let expectedHome=baseHome*homeBoost, expectedAway=baseAway*awayBoost, expectedTotal=expectedHome+expectedAway;
-  const marketAdjust={goals:1.0,sot:1.0,corners:1.03,cards:1.02}; expectedTotal*=marketAdjust[market]||1;
-  if (settings.knockoutMode && (market==="goals"||market==="sot")) expectedTotal*=0.96;
+
+  const marketAdjust={goals:1.0,btts:1.0,sot:1.0,team_sot:1.0,match_shots:1.06,team_shots:1.06,corners:1.03,cards:1.02};
+  expectedTotal*=marketAdjust[market]||1;
+  expectedHome*=marketAdjust[market]||1;
+  expectedAway*=marketAdjust[market]||1;
+
+  if (settings.knockoutMode && (market==="goals"||market==="sot"||market==="match_shots"||market==="team_shots"||market==="team_sot")) expectedTotal*=0.96;
   if (settings.knockoutMode && market==="cards") expectedTotal*=1.03;
-  const modelOver=probOverAsian(line,expectedTotal), modelUnder=1-modelOver;
+
   const {fairOver,fairUnder}=fairProbsFromOdds(overOdds,underOdds);
-  const overEdge=(modelOver-fairOver)*100, underEdge=(modelUnder-fairUnder)*100;
+
+  let modelOver=0, modelUnder=0, overEdge=0, underEdge=0;
+  let fairOverOdds=0, fairUnderOdds=0, suggestedOverOdds=0, suggestedUnderOdds=0;
+  let side="skip", pick="SKIP", edge=0, actionLabel="NO VALUE – AVOID", targetOdds=null, guideTitle="Avoid at current odds";
+  let labelOver="Over", labelUnder="Under", trueLine=expectedTotal;
   const threshold=settings.edgeThreshold;
   const waitThreshold=Math.max(0.5, threshold*0.5);
-  const fairOverOdds=modelOver>0?1/modelOver:0, fairUnderOdds=modelUnder>0?1/modelUnder:0;
-  const suggestedOverOdds=fairOverOdds*settings.suggestedMultiplier, suggestedUnderOdds=fairUnderOdds*settings.suggestedMultiplier;
-  let side="skip", pick="SKIP", edge=0, actionLabel="NO VALUE – AVOID", targetOdds=null, guideTitle="Avoid at current odds";
-  if(overEdge>threshold&&overEdge>underEdge){
-    side="over";pick=`OVER ${line}`;edge=overEdge; targetOdds=suggestedOverOdds;
-    actionLabel=`VALUE BET – TAKE OVER ${line} NOW`;
-    guideTitle=`Current odds are already good enough for OVER ${line}.`;
-  }
-  else if(underEdge>threshold&&underEdge>overEdge){
-    side="under";pick=`UNDER ${line}`;edge=underEdge; targetOdds=suggestedUnderOdds;
-    actionLabel=`VALUE BET – TAKE UNDER ${line} NOW`;
-    guideTitle=`Current odds are already good enough for UNDER ${line}.`;
-  } else if (Math.max(overEdge, underEdge) > waitThreshold) {
-    if (overEdge >= underEdge) {
-      targetOdds=suggestedOverOdds;
-      actionLabel=`WAIT – BET OVER ${line} IF ODDS REACH ${suggestedOverOdds.toFixed(2)}+ (IN-PLAY / DRIFT)`;
-      guideTitle=`Close on OVER ${line}, but the current price is still too low.`;
-    } else {
-      targetOdds=suggestedUnderOdds;
-      actionLabel=`WAIT – BET UNDER ${line} IF ODDS REACH ${suggestedUnderOdds.toFixed(2)}+ (IN-PLAY / DRIFT)`;
-      guideTitle=`Close on UNDER ${line}, but the current price is still too low.`;
+
+  if (isBttsMarket(market)) {
+    labelOver="BTTS YES";
+    labelUnder="BTTS NO";
+    const pHomeScore = 1 - poissonPmf(0, expectedHome);
+    const pAwayScore = 1 - poissonPmf(0, expectedAway);
+    modelOver = pHomeScore * pAwayScore;
+    modelUnder = 1 - modelOver;
+    overEdge=(modelOver-fairOver)*100;
+    underEdge=(modelUnder-fairUnder)*100;
+    if(overEdge>threshold&&overEdge>underEdge){
+      side="over"; pick="BTTS YES"; edge=overEdge; fairOverOdds=modelOver>0?1/modelOver:0; suggestedOverOdds=fairOverOdds*settings.suggestedMultiplier; targetOdds=suggestedOverOdds;
+      actionLabel=`VALUE BET – TAKE BTTS YES NOW`; guideTitle=`Current odds are already good enough for BTTS YES.`;
+    } else if(underEdge>threshold&&underEdge>overEdge){
+      side="under"; pick="BTTS NO"; edge=underEdge; fairUnderOdds=modelUnder>0?1/modelUnder:0; suggestedUnderOdds=fairUnderOdds*settings.suggestedMultiplier; targetOdds=suggestedUnderOdds;
+      actionLabel=`VALUE BET – TAKE BTTS NO NOW`; guideTitle=`Current odds are already good enough for BTTS NO.`;
+    } else if (Math.max(overEdge, underEdge) > waitThreshold) {
+      if (overEdge >= underEdge) {
+        fairOverOdds=modelOver>0?1/modelOver:0; suggestedOverOdds=fairOverOdds*settings.suggestedMultiplier; targetOdds=suggestedOverOdds;
+        actionLabel=`WAIT – BET BTTS YES IF ODDS REACH ${suggestedOverOdds.toFixed(2)}+`;
+        guideTitle=`Close on BTTS YES, but the current price is still too low.`;
+      } else {
+        fairUnderOdds=modelUnder>0?1/modelUnder:0; suggestedUnderOdds=fairUnderOdds*settings.suggestedMultiplier; targetOdds=suggestedUnderOdds;
+        actionLabel=`WAIT – BET BTTS NO IF ODDS REACH ${suggestedUnderOdds.toFixed(2)}+`;
+        guideTitle=`Close on BTTS NO, but the current price is still too low.`;
+      }
     }
+    trueLine = expectedTotal;
+  } else if (isTeamMarket(market)) {
+    const selectedExpected = teamSide === "home" ? expectedHome : expectedAway;
+    modelOver = probOverAsian(line, selectedExpected);
+    modelUnder = 1-modelOver;
+    overEdge=(modelOver-fairOver)*100;
+    underEdge=(modelUnder-fairUnder)*100;
+    fairOverOdds=modelOver>0?1/modelOver:0;
+    fairUnderOdds=modelUnder>0?1/modelUnder:0;
+    suggestedOverOdds=fairOverOdds*settings.suggestedMultiplier;
+    suggestedUnderOdds=fairUnderOdds*settings.suggestedMultiplier;
+    const team = sideName(row.match, teamSide);
+    labelOver = `${team} Over`;
+    labelUnder = `${team} Under`;
+    if(overEdge>threshold&&overEdge>underEdge){
+      side="over"; pick=`${team} OVER ${line}`; edge=overEdge; targetOdds=suggestedOverOdds;
+      actionLabel=`VALUE BET – TAKE ${team.toUpperCase()} OVER ${line} NOW`; guideTitle=`Current odds are already good enough for ${team} over ${line}.`;
+    } else if(underEdge>threshold&&underEdge>overEdge){
+      side="under"; pick=`${team} UNDER ${line}`; edge=underEdge; targetOdds=suggestedUnderOdds;
+      actionLabel=`VALUE BET – TAKE ${team.toUpperCase()} UNDER ${line} NOW`; guideTitle=`Current odds are already good enough for ${team} under ${line}.`;
+    } else if (Math.max(overEdge, underEdge) > waitThreshold) {
+      if (overEdge >= underEdge) {
+        targetOdds=suggestedOverOdds;
+        actionLabel=`WAIT – BET ${team.toUpperCase()} OVER ${line} IF ODDS REACH ${suggestedOverOdds.toFixed(2)}+`;
+        guideTitle=`Close on ${team} over ${line}, but the current price is still too low.`;
+      } else {
+        targetOdds=suggestedUnderOdds;
+        actionLabel=`WAIT – BET ${team.toUpperCase()} UNDER ${line} IF ODDS REACH ${suggestedUnderOdds.toFixed(2)}+`;
+        guideTitle=`Close on ${team} under ${line}, but the current price is still too low.`;
+      }
+    }
+    trueLine = selectedExpected;
+  } else {
+    modelOver=probOverAsian(line,expectedTotal);
+    modelUnder=1-modelOver;
+    overEdge=(modelOver-fairOver)*100;
+    underEdge=(modelUnder-fairUnder)*100;
+    fairOverOdds=modelOver>0?1/modelOver:0;
+    fairUnderOdds=modelUnder>0?1/modelUnder:0;
+    suggestedOverOdds=fairOverOdds*settings.suggestedMultiplier;
+    suggestedUnderOdds=fairUnderOdds*settings.suggestedMultiplier;
+    if(overEdge>threshold&&overEdge>underEdge){
+      side="over";pick=`OVER ${line}`;edge=overEdge; targetOdds=suggestedOverOdds;
+      actionLabel=`VALUE BET – TAKE OVER ${line} NOW`; guideTitle=`Current odds are already good enough for OVER ${line}.`;
+    } else if(underEdge>threshold&&underEdge>overEdge){
+      side="under";pick=`UNDER ${line}`;edge=underEdge; targetOdds=suggestedUnderOdds;
+      actionLabel=`VALUE BET – TAKE UNDER ${line} NOW`; guideTitle=`Current odds are already good enough for UNDER ${line}.`;
+    } else if (Math.max(overEdge, underEdge) > waitThreshold) {
+      if (overEdge >= underEdge) {
+        targetOdds=suggestedOverOdds;
+        actionLabel=`WAIT – BET OVER ${line} IF ODDS REACH ${suggestedOverOdds.toFixed(2)}+ (IN-PLAY / DRIFT)`;
+        guideTitle=`Close on OVER ${line}, but the current price is still too low.`;
+      } else {
+        targetOdds=suggestedUnderOdds;
+        actionLabel=`WAIT – BET UNDER ${line} IF ODDS REACH ${suggestedUnderOdds.toFixed(2)}+ (IN-PLAY / DRIFT)`;
+        guideTitle=`Close on UNDER ${line}, but the current price is still too low.`;
+      }
+    }
+    trueLine = expectedTotal;
   }
-  const confidence = confFromEdge(edge);
-  const confidenceScore = Math.max(0, Math.min(10, edge / 1.5));
-  const varianceInfo = getVarianceInfo(expectedTotal, line);
-  const probInfo = probabilityExplanation(modelOver, modelUnder, line, expectedTotal);
+
+  const varianceBase = isTeamMarket(market)?trueLine:expectedTotal;
+  const varianceInfo = getVarianceInfo(varianceBase, line);
+  const stabilityInfo = getStabilityInfo(varianceBase, line, market);
+  const adjustedEdge = edge * stabilityInfo.factor;
+  const confidence = confFromEdge(adjustedEdge);
+  const confidenceScore = scoreFromAdjustedEdge(adjustedEdge, varianceInfo.label);
+  const probInfo = probabilityExplanation(modelOver, modelUnder, line, varianceBase);
   const explanation =
-    side==="over"
+    isBttsMarket(market)
+      ? side==="over"
+        ? `The market is underestimating the chance of both teams scoring. BTTS YES is the value side at the current price.`
+        : side==="under"
+        ? `The market is overestimating both teams scoring. BTTS NO is the value side at the current price.`
+        : actionLabel.startsWith("WAIT")
+        ? `Do not bet BTTS yet. You only enter if the price improves to your target odds.`
+        : `No clear BTTS edge at the current odds.`
+      : isTeamMarket(market)
+      ? side==="over"
+        ? `The selected team projects above the line more often than the odds suggest, so the OVER side has value.`
+        : side==="under"
+        ? `The selected team projects below the line more often than the odds suggest, so the UNDER side has value.`
+        : actionLabel.startsWith("WAIT")
+        ? `Do not bet this team market yet. You only enter if the price improves to your target odds.`
+        : `No clear team-market edge at the current odds.`
+      : side==="over"
       ? `The bookmaker is favouring the UNDER side too much based on the current odds. Based on the data entered, this game has a better chance of going OVER ${line} than the market suggests, which is why OVER is the value side here.`
       : side==="under"
       ? `The bookmaker is favouring the OVER side too much compared with its true probability. Based on the data entered, this game is more likely to stay UNDER ${line} than the market suggests, which is why UNDER is the value side here.`
       : actionLabel.startsWith("WAIT")
       ? `Do not bet yet. The side is close, but you only enter if the price improves to your target odds and the game state still suits the pick.`
       : `No value at the current odds. Avoid forcing a bet here.`;
-  return {...row, expectedHome, expectedAway, expectedTotal, modelOver, modelUnder, fairOver, fairUnder, overEdge, underEdge, side, pick, edge, actionLabel, targetOdds, guideTitle, confidence, fairOverOdds, fairUnderOdds, suggestedOverOdds, suggestedUnderOdds, trueLine:expectedTotal, confidenceScore, varianceInfo, probInfo, explanation};
+
+  return {...row, expectedHome, expectedAway, expectedTotal, modelOver, modelUnder, fairOver, fairUnder, overEdge, underEdge, side, pick, edge, actionLabel, targetOdds, guideTitle, confidence, fairOverOdds, fairUnderOdds, suggestedOverOdds, suggestedUnderOdds, trueLine, confidenceScore, varianceInfo, probInfo, explanation, labelOver, labelUnder, teamSide};
 }
 const pct=v=>`${(v*100).toFixed(1)}%`; const num=v=>Number(v).toFixed(2);
 
@@ -223,12 +335,13 @@ export default function App(){
   const [avgCalc,setAvgCalc]=useState({match:"", market:"goals", mode:"split", homeForSeries:"", homeAgainstSeries:"", awayForSeries:"", awayAgainstSeries:""});
   const [avgBulkText,setAvgBulkText]=useState("");
   const [loaded,setLoaded]=useState(false);
+  const [teamSide,setTeamSide]=useState("home");
   const [installPromptEvent,setInstallPromptEvent]=useState(null);
   const [installReady,setInstallReady]=useState(false);
   const [installMsg,setInstallMsg]=useState("");
 
-  useEffect(()=>{ try{ const raw=localStorage.getItem(STORAGE_KEY); if(raw){ const d=JSON.parse(raw); if(d.forms)setForms(d.forms); if(d.bulkText!==undefined)setBulkText(d.bulkText); if(d.rows)setRows(d.rows); if(d.tracked)setTracked(d.tracked); if(d.settings)setSettings(d.settings); if(d.market)setMarket(d.market); if(d.avgCalc)setAvgCalc(d.avgCalc); if(d.avgBulkText!==undefined)setAvgBulkText(d.avgBulkText);} }catch(e){} setLoaded(true); },[]);
-  useEffect(()=>{ if(!loaded)return; try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({forms,bulkText,rows,tracked,settings,market,avgCalc,avgBulkText})); }catch(e){} },[forms,bulkText,rows,tracked,settings,market,avgCalc,avgBulkText,loaded]);
+  useEffect(()=>{ try{ const raw=localStorage.getItem(STORAGE_KEY); if(raw){ const d=JSON.parse(raw); if(d.forms)setForms(d.forms); if(d.bulkText!==undefined)setBulkText(d.bulkText); if(d.rows)setRows(d.rows); if(d.tracked)setTracked(d.tracked); if(d.settings)setSettings(d.settings); if(d.market)setMarket(d.market); if(d.avgCalc)setAvgCalc(d.avgCalc); if(d.avgBulkText!==undefined)setAvgBulkText(d.avgBulkText); if(d.teamSide)setTeamSide(d.teamSide);} }catch(e){} setLoaded(true); },[]);
+  useEffect(()=>{ if(!loaded)return; try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({forms,bulkText,rows,tracked,settings,market,avgCalc,avgBulkText,teamSide})); }catch(e){} },[forms,bulkText,rows,tracked,settings,market,avgCalc,avgBulkText,teamSide,loaded]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -281,7 +394,7 @@ export default function App(){
   }
 
   const active=forms[market]; const cfg=MARKET_CONFIG[market]; const avgCfg=MARKET_CONFIG[avgCalc.market];
-  const singleResult=useMemo(()=>analyseRow({...active, market}, settings),[active,market,settings]);
+  const singleResult=useMemo(()=>analyseRow({...active, market, teamSide}, settings),[active,market,settings,teamSide]);
   const analysedRows=useMemo(()=>rows.map(r=>analyseRow(r,settings)).filter(Boolean).sort((a,b)=>b.edge-a.edge),[rows,settings]);
   const strongCount=analysedRows.filter(r=>r.confidence==="Strong").length; const bestRow=analysedRows[0]||null;
   const trackerStats=useMemo(()=>{ const settled=tracked.filter(x=>x.result!=="Pending"); const wins=settled.filter(x=>x.result==="Won").length; const losses=settled.filter(x=>x.result==="Lost").length; const totalBets=wins+losses; const pending=tracked.filter(x=>x.result==="Pending").length; const profit=settled.reduce((sum,x)=> x.result==="Won" ? sum+((Number(x.odds)-1)*Number(x.stake)) : x.result==="Lost" ? sum-Number(x.stake) : sum ,0); const stake=settled.filter(x=>x.result!=="Void").reduce((sum,x)=>sum+Number(x.stake),0); const roi=stake>0?(profit/stake)*100:0; const winrate=(wins+losses)>0?(wins/(wins+losses))*100:0; return {settled: settled.length, profit, roi, winrate, wins, losses, totalBets, pending}; },[tracked]);
@@ -343,10 +456,10 @@ export default function App(){
     }));
   }
 
-  function addSingleToScanner(){ setRows(prev=>[{...active, market, id:`${Date.now()}-single`},...prev]); }
-  function importBulk(){ const parsed = bulkText.split("\n").map(x=>x.trim()).filter(Boolean).map((line,idx)=>{ const p=line.split(",").map(x=>x.trim()); if(p.length<9)return null; return {id:`${Date.now()}-${idx}`,match:p[0],market:p[1],homeFor:p[2],homeAgainst:p[3],awayFor:p[4],awayAgainst:p[5],line:p[6],overOdds:p[7],underOdds:p[8]}; }).filter(Boolean); setRows(parsed); }
-  function addScannerRowToTracker(row){ const stake=row.confidence==="Strong"?settings.stakeStrong:row.confidence==="Good"?settings.stakeGood:settings.stakeLean; const odds=row.side==="over"?row.overOdds:row.underOdds; setTracked(prev=>[{id:`${Date.now()}-${row.id}`,match:row.match,market:MARKET_CONFIG[row.market]?.label||row.market,pick:row.pick,confidence:row.confidence,edge:row.edge,odds,stake,result:"Pending"},...prev]); setActiveTab("tracker"); }
-  function addToTrackerFromResult(result){ if(!result||result.side==="skip")return; const stake=result.confidence==="Strong"?settings.stakeStrong:result.confidence==="Good"?settings.stakeGood:settings.stakeLean; const odds=result.side==="over"?active.overOdds:active.underOdds; setTracked(prev=>[{id:`${Date.now()}`,match:active.match||`${cfg.label} bet`,market:cfg.label,pick:result.pick,confidence:result.confidence,edge:result.edge,odds,stake,result:"Pending"},...prev]); setActiveTab("tracker"); }
+  function addSingleToScanner(){ setRows(prev=>[{...active, market, teamSide, id:`${Date.now()}-single`},...prev]); }
+  function importBulk(){ const parsed = bulkText.split("\n").map(x=>x.trim()).filter(Boolean).map((line,idx)=>{ const p=line.split(",").map(x=>x.trim()); if(p.length<9)return null; return {id:`${Date.now()}-${idx}`,match:p[0],market:p[1],homeFor:p[2],homeAgainst:p[3],awayFor:p[4],awayAgainst:p[5],line:p[6],overOdds:p[7],underOdds:p[8],teamSide:p[9]||"home"}; }).filter(Boolean); setRows(parsed); }
+  function addScannerRowToTracker(row){ const stake=row.confidence==="Strong"?settings.stakeStrong:row.confidence==="Good"?settings.stakeGood:settings.stakeLean; const odds=(row.side==="over"||row.side==="yes")?row.overOdds:row.underOdds; setTracked(prev=>[{id:`${Date.now()}-${row.id}`,match:row.match,market:MARKET_CONFIG[row.market]?.label||row.market,pick:row.pick,confidence:row.confidence,edge:row.edge,odds,stake,result:"Pending"},...prev]); setActiveTab("tracker"); }
+  function addToTrackerFromResult(result){ if(!result||result.side==="skip")return; const stake=result.confidence==="Strong"?settings.stakeStrong:result.confidence==="Good"?settings.stakeGood:settings.stakeLean; const odds=(result.side==="over"||result.side==="yes")?active.overOdds:active.underOdds; setTracked(prev=>[{id:`${Date.now()}`,match:active.match||`${cfg.label} bet`,market:cfg.label,pick:result.pick,confidence:result.confidence,edge:result.edge,odds,stake,result:"Pending"},...prev]); setActiveTab("tracker"); }
   function updateTracked(id,field,value){ setTracked(prev=>prev.map(x=>x.id===id?{...x,[field]:value}:x)); }
   function clearSaved(){ try{localStorage.removeItem(STORAGE_KEY)}catch(e){} setForms(DEFAULTS); setBulkText(""); setRows([]); setTracked([]); setAvgCalc({match:"",market:"goals",mode:"split",homeForSeries:"",homeAgainstSeries:"",awayForSeries:"",awayAgainstSeries:""}); setAvgBulkText(""); setSettings({edgeThreshold:3,suggestedMultiplier:1.05,homeAwayBoost:true,knockoutMode:false,stakeStrong:3,stakeGood:2,stakeLean:1}); }
   function badgeClass(conf){ if(conf==="Strong"||conf==="Good") return "badge green"; if(conf==="Lean") return "badge amber"; return "badge red"; }
@@ -388,7 +501,7 @@ export default function App(){
         <div className="kpi"><div className="k">Scanned rows</div><div className="v">{analysedRows.length}</div><div className="s">Saved on this browser</div></div>
         <div className="kpi"><div className="k">Strong bets</div><div className="v">{strongCount}</div><div className="s">High priority</div></div>
         <div className="kpi"><div className="k">Tracker bets</div><div className="v">{tracked.length}</div><div className="s">Saved after refresh</div></div>
-        <div className="kpi"><div className="k">Best edge</div><div className="v">{bestRow ? `${bestRow.edge.toFixed(1)}%` : "-"}</div><div className="s">{bestRow ? bestRow.match : "No rows yet"}</div></div>
+        <div className="kpi"><div className="k">Best edge</div><div className="v">{bestRow ? `${(bestRow.adjustedEdge ?? bestRow.edge).toFixed(1)}%` : "-"}</div><div className="s">{bestRow ? bestRow.match : "No rows yet"}</div></div>
       </section>
 
       {activeTab==="averages" && (
@@ -504,6 +617,12 @@ export default function App(){
                 </button>
               ))}
             </div>
+            {isTeamMarket(market) && (
+              <div className="pillRow" style={{marginTop:0}}>
+                <button className={`pill ${teamSide==="home"?"active":""}`} onClick={()=>setTeamSide("home")}>Target: Home team</button>
+                <button className={`pill ${teamSide==="away"?"active":""}`} onClick={()=>setTeamSide("away")}>Target: Away team</button>
+              </div>
+            )}
             <h2 className="sectionTitle">{cfg.label} scanner</h2>
             <p className="sectionSub">{cfg.lineHint}</p>
             <div className="formGrid">
@@ -512,9 +631,9 @@ export default function App(){
               <div className="field"><label>Home {cfg.againstLabel}</label><input className="input" value={active.homeAgainst} onChange={(e)=>update("homeAgainst", e.target.value)} /></div>
               <div className="field"><label>Away {cfg.forLabel}</label><input className="input" value={active.awayFor} onChange={(e)=>update("awayFor", e.target.value)} /></div>
               <div className="field"><label>Away {cfg.againstLabel}</label><input className="input" value={active.awayAgainst} onChange={(e)=>update("awayAgainst", e.target.value)} /></div>
-              <div className="field"><label>Line</label><input className="input" value={active.line} onChange={(e)=>update("line", e.target.value)} /></div>
-              <div className="field"><label>Over odds</label><input className="input" value={active.overOdds} onChange={(e)=>update("overOdds", e.target.value)} /></div>
-              <div className="field"><label>Under odds</label><input className="input" value={active.underOdds} onChange={(e)=>update("underOdds", e.target.value)} /></div>
+              <div className="field"><label>{market==="btts"?"Line (use 0.5)":isTeamMarket(market)?"Team line":"Line"}</label><input className="input" value={active.line} onChange={(e)=>update("line", e.target.value)} /></div>
+              <div className="field"><label>{market==="btts"?"Yes odds":"Over odds"}</label><input className="input" value={active.overOdds} onChange={(e)=>update("overOdds", e.target.value)} /></div>
+              <div className="field"><label>{market==="btts"?"No odds":"Under odds"}</label><input className="input" value={active.underOdds} onChange={(e)=>update("underOdds", e.target.value)} /></div>
             </div>
             <div className="actions">
               <button className="btn primary" onClick={addSingleToScanner}>Add to scanner</button>
@@ -523,7 +642,7 @@ export default function App(){
             <details className="bulkBox">
               <summary><span>Bulk scanner</span><span className="small">Tap to open / close</span></summary>
               <div className="bulkInner">
-                <p className="sectionSub">Format: match,market,homeFor,homeAgainst,awayFor,awayAgainst,line,overOdds,underOdds</p>
+                <p className="sectionSub">Format: match,market,homeFor,homeAgainst,awayFor,awayAgainst,line,overOdds,underOdds[,teamSide]</p>
                 <textarea className="textarea" value={bulkText} onChange={(e)=>setBulkText(e.target.value)} />
                 <div className="actions"><button className="btn primary" onClick={importBulk}>Import rows</button></div>
               </div>
@@ -539,15 +658,15 @@ export default function App(){
               <div className="resultMetrics">
                 <div className="metric"><div className="k">Expected total</div><div className="v">{num(singleResult.expectedTotal)}</div></div>
                 <div className="metric"><div className="k">True line</div><div className="v">{num(singleResult.trueLine)}</div></div>
-                <div className="metric"><div className="k">Edge</div><div className="v">{singleResult.adjustedEdge ? singleResult.adjustedEdge.toFixed(1) : singleResult.edge.toFixed(1)}%</div></div>
+                <div className="metric"><div className="k">Edge</div><div className="v">{(singleResult.adjustedEdge ?? singleResult.edge).toFixed(1)}%</div></div>
                 <div className="metric"><div className="k">Confidence</div><div className="v">{singleResult.confidenceScore.toFixed(1)}/10</div></div>
-                <div className="metric"><div className="k">Rating</div><div className="v">{getRating(singleResult.edge)}</div></div>
+                <div className="metric"><div className="k">Rating</div><div className="v">{getRating(singleResult.adjustedEdge ?? singleResult.edge)}</div></div>
               </div>
               <div className="resultGrid">
-                <div className="detail"><h4>Model probabilities</h4><p>Over: {pct(singleResult.modelOver)}</p><p>Under: {pct(singleResult.modelUnder)}</p></div>
-                <div className="detail"><h4>Book fair probabilities</h4><p>Over: {pct(singleResult.fairOver)}</p><p>Under: {pct(singleResult.fairUnder)}</p></div>
-                <div className={`detail ${singleResult.side==="over"?"":"dim"}`}><h4>Over fair / suggested</h4><p>Fair odds: {num(singleResult.fairOverOdds)}</p><p>Suggested odds: {num(singleResult.suggestedOverOdds)}</p></div>
-                <div className={`detail ${singleResult.side==="under"?"":"dim"}`}><h4>Under fair / suggested</h4><p>Fair odds: {num(singleResult.fairUnderOdds)}</p><p>Suggested odds: {num(singleResult.suggestedUnderOdds)}</p></div>
+                <div className="detail"><h4>Model probabilities</h4><p>{singleResult.labelOver}: {pct(singleResult.modelOver)}</p><p>{singleResult.labelUnder}: {pct(singleResult.modelUnder)}</p></div>
+                <div className="detail"><h4>Book fair probabilities</h4><p>{singleResult.labelOver}: {pct(singleResult.fairOver)}</p><p>{singleResult.labelUnder}: {pct(singleResult.fairUnder)}</p></div>
+                <div className={`detail ${singleResult.side==="over"?"":"dim"}`}><h4>{singleResult.labelOver} fair / suggested</h4><p>Fair odds: {num(singleResult.fairOverOdds)}</p><p>Suggested odds: {num(singleResult.suggestedOverOdds)}</p></div>
+                <div className={`detail ${singleResult.side==="under"?"":"dim"}`}><h4>{singleResult.labelUnder} fair / suggested</h4><p>Fair odds: {num(singleResult.fairUnderOdds)}</p><p>Suggested odds: {num(singleResult.suggestedUnderOdds)}</p></div>
               </div>
               <div className="edgeMeter">
                 <div className="edgeBar">
@@ -555,7 +674,7 @@ export default function App(){
                   {singleResult.overEdge > 0 && <div className={`edgeFill over ${confidenceBarClass(singleResult.actionLabel)}`} style={{width: edgeWidth(singleResult.overEdge) + "%"}}></div>}
                   {singleResult.underEdge > 0 && <div className={`edgeFill under ${confidenceBarClass(singleResult.actionLabel)}`} style={{width: edgeWidth(singleResult.underEdge) + "%"}}></div>}
                 </div>
-                <div className="edgeLabels"><span>UNDER</span><span>OVER</span></div>
+                <div className="edgeLabels"><span>{singleResult.labelUnder.toUpperCase()}</span><span>{singleResult.labelOver.toUpperCase()}</span></div>
               </div>
               <div className="decision">
                 <div className={`decisionText ${singleResult.actionLabel.startsWith("VALUE BET")?"strong":singleResult.actionLabel.startsWith("WAIT")?"lean":"skip"}`}>
@@ -568,7 +687,7 @@ export default function App(){
                 <p>{singleResult.probInfo?.summary}</p>
                 <p>{singleResult.probInfo?.reasoning}</p>
                 <p><strong>{singleResult.probInfo?.varianceLabel}</strong> — {singleResult.probInfo?.varianceText}</p>
-                <p><strong>Stability filter:</strong> {singleResult.stabilityProfile?.label} — {singleResult.stabilityProfile?.text}</p>
+                <p><strong>Stability filter</strong> — {singleResult.stabilityInfo?.label}: {singleResult.stabilityInfo?.text}</p>
               </div>
               <div className="detail" style={{marginTop:12}}>
                 <h4>Entry guide</h4>
@@ -589,9 +708,7 @@ export default function App(){
                     <p>Avoid forcing a bet just because the match looks tempting.</p>
                   </>
                 )}
-                <div className="small" style={{marginTop:8}}>
-                  Raw edge: {singleResult.edge.toFixed(1)}% · Adjusted edge: {(singleResult.adjustedEdge ?? singleResult.edge).toFixed(1)}%
-                </div>
+                <div className="small" style={{marginTop:8}}>Raw edge: {singleResult.edge.toFixed(1)}% · Adjusted edge: {(singleResult.adjustedEdge ?? singleResult.edge).toFixed(1)}%</div>
                 <div className="varianceExplain">
                   <strong>{singleResult.varianceInfo?.label}</strong>
                   <div className="small">{singleResult.varianceInfo?.text}</div>
@@ -614,7 +731,7 @@ export default function App(){
                     <div className={badgeClass(row.confidence)}>{row.confidence}</div>
                   </div>
                   <div className="bestStats">
-                    <div className="bestStat"><div className="k">Edge</div><div className="v">{row.edge.toFixed(1)}%</div></div>
+                    <div className="bestStat"><div className="k">Edge</div><div className="v">{(row.adjustedEdge ?? row.edge).toFixed(1)}%</div></div>
                     <div className="bestStat"><div className="k">True line</div><div className="v">{num(row.trueLine)}</div></div>
                     <div className="bestStat"><div className="k">Fair</div><div className="v">{row.side==="over"?num(row.fairOverOdds):num(row.fairUnderOdds)}</div></div>
                     <div className="bestStat"><div className="k">Suggested</div><div className="v">{row.side==="over"?num(row.suggestedOverOdds):num(row.suggestedUnderOdds)}</div></div>
