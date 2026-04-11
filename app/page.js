@@ -185,9 +185,62 @@ export default function App(){
   const [avgCalc,setAvgCalc]=useState({match:"", market:"goals", mode:"split", homeForSeries:"", homeAgainstSeries:"", awayForSeries:"", awayAgainstSeries:""});
   const [avgBulkText,setAvgBulkText]=useState("");
   const [loaded,setLoaded]=useState(false);
+  const [installPromptEvent,setInstallPromptEvent]=useState(null);
+  const [installReady,setInstallReady]=useState(false);
+  const [installMsg,setInstallMsg]=useState("");
 
   useEffect(()=>{ try{ const raw=localStorage.getItem(STORAGE_KEY); if(raw){ const d=JSON.parse(raw); if(d.forms)setForms(d.forms); if(d.bulkText!==undefined)setBulkText(d.bulkText); if(d.rows)setRows(d.rows); if(d.tracked)setTracked(d.tracked); if(d.settings)setSettings(d.settings); if(d.market)setMarket(d.market); if(d.avgCalc)setAvgCalc(d.avgCalc); if(d.avgBulkText!==undefined)setAvgBulkText(d.avgBulkText);} }catch(e){} setLoaded(true); },[]);
   useEffect(()=>{ if(!loaded)return; try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({forms,bulkText,rows,tracked,settings,market,avgCalc,avgBulkText})); }catch(e){} },[forms,bulkText,rows,tracked,settings,market,avgCalc,avgBulkText,loaded]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const isStandalone = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
+    if (isStandalone) {
+      setInstallMsg("Installed");
+    }
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+    }
+
+    const onBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setInstallPromptEvent(e);
+      setInstallReady(true);
+      setInstallMsg("Install ready");
+    };
+
+    const onAppInstalled = () => {
+      setInstallReady(false);
+      setInstallPromptEvent(null);
+      setInstallMsg("Installed");
+    };
+
+    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+    window.addEventListener("appinstalled", onAppInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", onAppInstalled);
+    };
+  }, []);
+
+  async function handleInstallApp(){
+    if (!installPromptEvent) {
+      setInstallMsg("Use Chrome menu → Add to Home screen");
+      return;
+    }
+    installPromptEvent.prompt();
+    const choice = await installPromptEvent.userChoice;
+    if (choice?.outcome === "accepted") {
+      setInstallMsg("Installing…");
+    } else {
+      setInstallMsg("Install cancelled");
+    }
+    setInstallPromptEvent(null);
+    setInstallReady(false);
+  }
 
   const active=forms[market]; const cfg=MARKET_CONFIG[market]; const avgCfg=MARKET_CONFIG[avgCalc.market];
   const singleResult=useMemo(()=>analyseRow({...active, market}, settings),[active,market,settings]);
@@ -273,7 +326,15 @@ export default function App(){
       <section className="hero">
         <div className="heroCard">
           <div className="titleRow"><div className="logo">🔥</div><div><div className="title">Value Scanner Phase 6.2</div><div className="subtitle">Easier to understand. The Averages tab now tells you exactly whether to use home-only or away-only numbers.</div></div></div>
-          <div className="pillRow"><div className="pill active">Home-only / away-only guidance</div><div className="pill">Market-aware averages</div><div className="pill">Auto switch scanner</div></div>
+          <div className="pillRow">
+            <div className="pill active">Home-only / away-only guidance</div>
+            <div className="pill">Market-aware averages</div>
+            <div className="pill">Auto switch scanner</div>
+            <button className={`pill ${installReady ? "active" : ""}`} onClick={handleInstallApp}>
+              {installReady ? "Install TDT Scanner" : "Add to Home Screen"}
+            </button>
+          </div>
+          {installMsg ? <div className="small" style={{marginTop:8}}>{installMsg}</div> : null}
         </div>
         <div className="helpCard">
           <h3 style={{marginTop:0}}>Correct method</h3>
