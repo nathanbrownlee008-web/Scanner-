@@ -684,8 +684,9 @@ export default function App(){
     style={{ width: `${singleResult.confidence * 10}%` }}
   />
 )}
-                <div className="edgeLabels"><span>{singleResult.labelUnder.toUpperCase()}</span><span>{singleResult.labelOver.toUpperCase()}</span></div>
-              </div>
+                <div className="edgeLabels">
+  <span>VALUE EDGE → {singleResult.side}</span>
+</div>
               <div className="decision">
                 <div className={`decisionText ${singleResult.actionLabel.startsWith("VALUE BET")?"strong":singleResult.actionLabel.startsWith("WAIT")?"lean":"skip"}`}>
                   {singleResult.actionLabel}
