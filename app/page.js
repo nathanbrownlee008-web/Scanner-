@@ -46,6 +46,26 @@ function confidenceBarClass(label){
   if ((label||"").startsWith("WAIT")) return "conf-mid";
   return "conf-low";
 }
+
+function getVarianceInfo(expected, line){
+  const diff = Math.abs(expected - line);
+  if(diff < 0.15){
+    return {
+      label: "High variance",
+      text: "Very close to the line — the outcome can swing easily on one goal, card, or momentum shift. Value can still exist, but the bet is more volatile."
+    };
+  }
+  if(diff < 0.35){
+    return {
+      label: "Medium variance",
+      text: "Some separation from the line — there is still volatility, but it is more stable than a high-variance setup."
+    };
+  }
+  return {
+    label: "Low variance",
+    text: "Clear gap from the line — the model has stronger separation from the market line, so the prediction is more stable."
+  };
+}
 function trackerPoints(tracked){
   let running = 0;
   return tracked.slice().reverse().map((x, idx) => {
@@ -67,6 +87,32 @@ function trackerGraphPath(points, width=320, height=90){
   }).join(" ");
 }
 function confFromEdge(edge){ if(edge>=8)return"Strong"; if(edge>=5)return"Good"; if(edge>=3)return"Lean"; return"Low"; }
+
+function probabilityExplanation(modelOver, modelUnder, line, expectedTotal){
+  const overPct = (modelOver * 100).toFixed(1);
+  const underPct = (modelUnder * 100).toFixed(1);
+  const diff = Math.abs(expectedTotal - line);
+  let varianceLabel = "Low variance";
+  let varianceText = "Clear gap from the line — more stable prediction, stronger confidence in the edge.";
+  if (diff < 0.15) {
+    varianceLabel = "High variance";
+    varianceText = "Very close to the line — outcome can swing easily, even if value exists.";
+  } else if (diff < 0.35) {
+    varianceLabel = "Medium variance";
+    varianceText = "Some separation from the line — still some volatility, but more stable than high variance.";
+  }
+  return {
+    summary: `Based on the averages entered, the model estimates OVER ${line} lands ${overPct}% of the time and UNDER ${line} lands ${underPct}% of the time.`,
+    reasoning:
+      expectedTotal > line
+        ? `The expected total sits above the line, which pushes probability toward the OVER side.`
+        : expectedTotal < line
+        ? `The expected total sits below the line, which pushes probability toward the UNDER side.`
+        : `The expected total is right on the line, so this is a very fine-margin spot.`,
+    varianceLabel,
+    varianceText
+  };
+}
 
 function analyseRow(row, settings){
   const homeFor=parseNum(row.homeFor), homeAgainst=parseNum(row.homeAgainst), awayFor=parseNum(row.awayFor), awayAgainst=parseNum(row.awayAgainst), line=parseNum(row.line), overOdds=parseNum(row.overOdds), underOdds=parseNum(row.underOdds), market=row.market;
@@ -111,7 +157,7 @@ function analyseRow(row, settings){
     side==="under" ? `The market is too heavily weighted toward OVER compared with its true probability, so UNDER ${line} is priced better than your model says it should be.` :
     actionLabel.startsWith("WAIT") ? `Do not bet yet. You only enter if the price improves to your target odds and the game state still suits the pick.` :
     `No value at the current odds. Avoid forcing a bet here.`;
-  return {...row, expectedHome, expectedAway, expectedTotal, modelOver, modelUnder, fairOver, fairUnder, overEdge, underEdge, side, pick, edge, actionLabel, targetOdds, guideTitle, confidence, fairOverOdds, fairUnderOdds, suggestedOverOdds, suggestedUnderOdds, trueLine:expectedTotal, confidenceScore, volatility, explanation};
+  return {...row, expectedHome, expectedAway, expectedTotal, modelOver, modelUnder, fairOver, fairUnder, overEdge, underEdge, side, pick, edge, actionLabel, targetOdds, guideTitle, confidence, fairOverOdds, fairUnderOdds, suggestedOverOdds, suggestedUnderOdds, trueLine:expectedTotal, confidenceScore, volatility, varianceInfo, explanation};
 }
 const pct=v=>`${(v*100).toFixed(1)}%`; const num=v=>Number(v).toFixed(2);
 
@@ -402,7 +448,13 @@ export default function App(){
                 <div className={`decisionText ${singleResult.actionLabel.startsWith("VALUE BET")?"strong":singleResult.actionLabel.startsWith("WAIT")?"lean":"skip"}`}>
                   {singleResult.actionLabel}
                 </div>
-                <div className="small">{singleResult.explanation} · {singleResult.volatility}</div>
+                <div className="small">{singleResult.explanation}</div>
+              </div>
+              <div className="detail" style={{marginTop:12}}>
+                <h4>Probability view</h4>
+                <p>{singleResult.probInfo?.summary}</p>
+                <p>{singleResult.probInfo?.reasoning}</p>
+                <p><strong>{singleResult.probInfo?.varianceLabel}</strong> — {singleResult.probInfo?.varianceText}</p>
               </div>
               <div className="detail" style={{marginTop:12}}>
                 <h4>Entry guide</h4>
@@ -423,6 +475,10 @@ export default function App(){
                     <p>Avoid forcing a bet just because the match looks tempting.</p>
                   </>
                 )}
+                <div className="varianceExplain">
+                  <strong>{singleResult.volatility}</strong>
+                  <div className="small">{singleResult.varianceInfo?.text}</div>
+                </div>
               </div>
             </>}
           </div>
@@ -470,10 +526,7 @@ export default function App(){
               <div className="kpi"><div className="k">Lost</div><div className="v">{trackerStats.losses}</div></div>
               <div className="kpi"><div className="k">Pending</div><div className="v">{trackerStats.pending}</div></div>
             </div>
-            <div className="graphCard">
-              <div className="graphHead">
-                <div className="k">Profit line</div>
-                <div className="small">Running profit across tracked bets</div>
+<div className="small">Running profit across tracked bets</div>
               </div>
               {graphPoints.length ? (
                 <svg viewBox="0 0 320 90" className="profitGraph" preserveAspectRatio="none">

@@ -117,3 +117,5 @@ details.bulkBox>summary::-webkit-details-marker{display:none}
   .desktopTrackedTable{display:none}
   .mobileTrackedGrid .input{min-width:0}
 }
+
+.varianceExplain{margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
