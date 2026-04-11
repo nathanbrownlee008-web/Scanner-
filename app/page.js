@@ -298,7 +298,7 @@ export default function App(){
   const [installReady,setInstallReady]=useState(false);
   const [installMsg,setInstallMsg]=useState("");
 
-  useEffect(()=>{ try{ const raw=localStorage.getItem(STORAGE_KEY); if(raw){ const d=JSON.parse(raw); if(d.forms)setForms(d.forms); if(d.bulkText!==undefined)setBulkText(d.bulkText); if(d.rows)setRows(d.rows); if(d.tracked)setTracked(d.tracked); if(d.settings)setSettings(d.settings); if(d.market)setMarket(d.market); if(d.avgCalc)setAvgCalc(d.avgCalc); if(d.avgBulkText!==undefined)setAvgBulkText(d.avgBulkText); if(d.teamSide)setTeamSide(d.teamSide);} }catch(e){} setLoaded(true); },[]);
+  useEffect(()=>{ try{ const raw=localStorage.getItem(STORAGE_KEY); if(raw){ const d=JSON.parse(raw); if(d.forms)setForms({...DEFAULTS, ...d.forms}); if(d.bulkText!==undefined)setBulkText(d.bulkText); if(d.rows)setRows(d.rows); if(d.tracked)setTracked(d.tracked); if(d.settings)setSettings(d.settings); if(d.market)setMarket(d.market); if(d.avgCalc)setAvgCalc(d.avgCalc); if(d.avgBulkText!==undefined)setAvgBulkText(d.avgBulkText); if(d.teamSide)setTeamSide(d.teamSide);} }catch(e){} setLoaded(true); },[]);
   useEffect(()=>{ if(!loaded)return; try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({forms,bulkText,rows,tracked,settings,market,avgCalc,avgBulkText,teamSide})); }catch(e){} },[forms,bulkText,rows,tracked,settings,market,avgCalc,avgBulkText,teamSide,loaded]);
 
   useEffect(() => {
@@ -351,7 +351,7 @@ export default function App(){
     setInstallReady(false);
   }
 
-  const active=forms[market]; const cfg=MARKET_CONFIG[market]; const avgCfg=MARKET_CONFIG[avgCalc.market];
+  const active=forms[market] || DEFAULTS[market]; const cfg=MARKET_CONFIG[market]; const avgCfg=MARKET_CONFIG[avgCalc.market] || MARKET_CONFIG.goals;
   const singleResult=useMemo(()=>analyseRow({...active, market, teamSide}, settings),[active,market,settings,teamSide]);
   const analysedRows=useMemo(()=>rows.map(r=>analyseRow(r,settings)).filter(Boolean).sort((a,b)=>b.edge-a.edge),[rows,settings]);
   const strongCount=analysedRows.filter(r=>r.confidence==="Strong").length; const bestRow=analysedRows[0]||null;
@@ -419,7 +419,7 @@ export default function App(){
   function addScannerRowToTracker(row){ const stake=row.confidence==="Strong"?settings.stakeStrong:row.confidence==="Good"?settings.stakeGood:settings.stakeLean; const odds=(row.side==="over"||row.side==="yes")?row.overOdds:row.underOdds; setTracked(prev=>[{id:`${Date.now()}-${row.id}`,match:row.match,market:MARKET_CONFIG[row.market]?.label||row.market,pick:row.pick,confidence:row.confidence,edge:row.edge,odds,stake,result:"Pending"},...prev]); setActiveTab("tracker"); }
   function addToTrackerFromResult(result){ if(!result||result.side==="skip")return; const stake=result.confidence==="Strong"?settings.stakeStrong:result.confidence==="Good"?settings.stakeGood:settings.stakeLean; const odds=(result.side==="over"||result.side==="yes")?active.overOdds:active.underOdds; setTracked(prev=>[{id:`${Date.now()}`,match:active.match||`${cfg.label} bet`,market:cfg.label,pick:result.pick,confidence:result.confidence,edge:result.edge,odds,stake,result:"Pending"},...prev]); setActiveTab("tracker"); }
   function updateTracked(id,field,value){ setTracked(prev=>prev.map(x=>x.id===id?{...x,[field]:value}:x)); }
-  function clearSaved(){ try{localStorage.removeItem(STORAGE_KEY)}catch(e){} setForms(DEFAULTS); setBulkText(""); setRows([]); setTracked([]); setAvgCalc({match:"",market:"goals",mode:"split",homeForSeries:"",homeAgainstSeries:"",awayForSeries:"",awayAgainstSeries:""}); setAvgBulkText(""); setSettings({edgeThreshold:3,suggestedMultiplier:1.05,homeAwayBoost:true,knockoutMode:false,stakeStrong:3,stakeGood:2,stakeLean:1}); }
+  function clearSaved(){ try{localStorage.removeItem(STORAGE_KEY)}catch(e){} setForms(DEFAULTS); setBulkText(""); setRows([]); setTracked([]); setAvgCalc({match:"",market:"goals",mode:"split",homeForSeries:"",homeAgainstSeries:"",awayForSeries:"",awayAgainstSeries:""}); setAvgBulkText(""); setTeamSide("home"); setSettings({edgeThreshold:3,suggestedMultiplier:1.05,homeAwayBoost:true,knockoutMode:false,stakeStrong:3,stakeGood:2,stakeLean:1}); }
   function badgeClass(conf){ if(conf==="Strong"||conf==="Good") return "badge green"; if(conf==="Lean") return "badge amber"; return "badge red"; }
 
   return (
