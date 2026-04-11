@@ -671,9 +671,19 @@ export default function App(){
               <div className="edgeMeter">
                 <div className="edgeBar">
                   <div className="edgeCenter"></div>
-                  {singleResult.overEdge > 0 && <div className={`edgeFill over ${confidenceBarClass(singleResult.actionLabel)}`} style={{width: edgeWidth(singleResult.overEdge) + "%"}}></div>}
-                  {singleResult.underEdge > 0 && <div className={`edgeFill under ${confidenceBarClass(singleResult.actionLabel)}`} style={{width: edgeWidth(singleResult.underEdge) + "%"}}></div>}
-                </div>
+                  {singleResult.overEdge > 0 && (
+  <div
+    className="edgeFill over"
+    style={{ width: `${singleResult.confidence * 10}%` }}
+  />
+)}
+
+{singleResult.underEdge > 0 && (
+  <div
+    className="edgeFill under"
+    style={{ width: `${singleResult.confidence * 10}%` }}
+  />
+)}
                 <div className="edgeLabels"><span>{singleResult.labelUnder.toUpperCase()}</span><span>{singleResult.labelOver.toUpperCase()}</span></div>
               </div>
               <div className="decision">
