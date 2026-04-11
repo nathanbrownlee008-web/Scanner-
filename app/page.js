@@ -86,6 +86,15 @@ function trackerGraphPath(points, width=320, height=90){
     return `${i===0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
   }).join(" ");
 }
+
+function getRating(edge){
+  if(edge >= 10) return "A+";
+  if(edge >= 7) return "A";
+  if(edge >= 5) return "B";
+  if(edge >= 3) return "C";
+  return "D";
+}
+
 function confFromEdge(edge){ if(edge>=8)return"Strong"; if(edge>=5)return"Good"; if(edge>=3)return"Lean"; return"Low"; }
 
 function probabilityExplanation(modelOver, modelUnder, line, expectedTotal){
@@ -151,10 +160,12 @@ function analyseRow(row, settings){
       guideTitle=`Close on UNDER ${line}, but the current price is still too low.`;
     }
   }
-  const confidence=confFromEdge(edge), confidenceScore=Math.max(0,Math.min(10,edge/1.5)), volatility=Math.abs(expectedTotal-line)<0.15?"High variance — close to line":"Normal";
+  const confidence = confFromEdge(edge);
+  const confidenceScore = Math.max(0, Math.min(10, edge / 1.5));
+  const varianceInfo = getVarianceInfo(expectedTotal, line);
   const explanation=
-    side==="over" ? `The market is too heavily weighted toward UNDER compared with its true probability, so OVER ${line} is priced better than your model says it should be.` :
-    side==="under" ? `The market is too heavily weighted toward OVER compared with its true probability, so UNDER ${line} is priced better than your model says it should be.` :
+    side==="over" ? `The bookmaker is favouring the UNDER side too much based on current odds. Based on the data, this game has a higher chance of going OVER ${line} is priced better than your model says it should be.` :
+    side==="under" ? `The bookmaker is favouring the OVER side too much compared to its true probability. Based on the data, this game is more likely to stay UNDER ${line} is priced better than your model says it should be.` :
     actionLabel.startsWith("WAIT") ? `Do not bet yet. You only enter if the price improves to your target odds and the game state still suits the pick.` :
     `No value at the current odds. Avoid forcing a bet here.`;
   return {...row, expectedHome, expectedAway, expectedTotal, modelOver, modelUnder, fairOver, fairUnder, overEdge, underEdge, side, pick, edge, actionLabel, targetOdds, guideTitle, confidence, fairOverOdds, fairUnderOdds, suggestedOverOdds, suggestedUnderOdds, trueLine:expectedTotal, confidenceScore, volatility, varianceInfo, explanation};
@@ -429,6 +440,7 @@ export default function App(){
                 <div className="metric"><div className="k">True line</div><div className="v">{num(singleResult.trueLine)}</div></div>
                 <div className="metric"><div className="k">Edge</div><div className="v">{singleResult.edge.toFixed(1)}%</div></div>
                 <div className="metric"><div className="k">Confidence</div><div className="v">{singleResult.confidenceScore.toFixed(1)}/10</div></div>
+<div className="metric"><div className="k">Rating</div><div className="v">{getRating(singleResult.edge)}</div></div>
               </div>
               <div className="resultGrid">
                 <div className="detail"><h4>Model probabilities</h4><p>Over: {pct(singleResult.modelOver)}</p><p>Under: {pct(singleResult.modelUnder)}</p></div>
@@ -476,7 +488,7 @@ export default function App(){
                   </>
                 )}
                 <div className="varianceExplain">
-                  <strong>{singleResult.volatility}</strong>
+                  <strong>{singleResult.varianceInfo?.label}</strong>
                   <div className="small">{singleResult.varianceInfo?.text}</div>
                 </div>
               </div>
@@ -526,23 +538,7 @@ export default function App(){
               <div className="kpi"><div className="k">Lost</div><div className="v">{trackerStats.losses}</div></div>
               <div className="kpi"><div className="k">Pending</div><div className="v">{trackerStats.pending}</div></div>
             </div>
-<div className="small">Running profit across tracked bets</div>
-              </div>
-              {graphPoints.length ? (
-                <svg viewBox="0 0 320 90" className="profitGraph" preserveAspectRatio="none">
-                  {graphPoints.length > 1 ? <path d={graphPath} className="profitPath" /> : null}
-                  {graphPoints.length === 1 ? (
-                    <circle
-                      className="profitDot"
-                      cx="160"
-                      cy="45"
-                      r="5"
-                    />
-                  ) : null}
-                </svg>
-              ) : (
-                <div className="small">Add tracked bets to see the graph.</div>
-              )}
+}
             </div>
           </div>
           <div className="card">
