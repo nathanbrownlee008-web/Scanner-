@@ -1,12 +1,15 @@
 export const metadata = {
-  title: "Value Scanner Phase 6.2",
-  description: "Market-aware averages with home/away guidance"
+  title: "TDT Scanner",
+  description: "Market-aware averages with home/away guidance",
+  manifest: "/manifest.json",
+  themeColor: "#22c55e"
 };
 
 export const viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#22c55e",
 };
 
 import "./globals.css";

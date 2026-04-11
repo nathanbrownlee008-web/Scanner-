@@ -48,7 +48,7 @@ button,input,textarea,select{font:inherit}
 .badge.green{background:rgba(34,197,94,.14);color:#baffcf;border-color:rgba(34,197,94,.34)}
 .badge.amber{background:rgba(245,158,11,.12);color:#ffd590;border-color:rgba(245,158,11,.3)}
 .badge.red{background:rgba(239,68,68,.12);color:#ffb3b3;border-color:rgba(239,68,68,.3)}
-.resultMetrics{grid-template-columns:repeat(4,1fr);margin-bottom:12px}
+.resultMetrics{grid-template-columns:repeat(5,1fr);margin-bottom:12px}
 .metric{background:rgba(7,11,16,.56);border:1px solid var(--line);border-radius:16px;padding:13px;min-width:0}
 .metric .k{font-size:12px;color:var(--muted);margin-bottom:6px}
 .metric .v{font-size:21px;font-weight:900;overflow-wrap:anywhere}
